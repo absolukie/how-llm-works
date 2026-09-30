@@ -52,7 +52,7 @@
       </div>
       <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
       <div class="deeper" hidden>
-        <p>Most tokenizers learn their vocabulary with <b>byte-pair encoding</b>: start from single characters and repeatedly merge the most frequent adjacent pair, until the vocabulary hits its target size — tens of thousands of pieces. Frequent words earn their own token; rare words get spelled out in chunks, so <i>any</i> text can be represented. Rule of thumb: about 4 characters ≈ 3 tokens in English. The tokenizer is frozen before training and shared by the model forever — which is why a model can never learn a new word's spelling after the fact.</p>
+        <p>Most tokenizers learn their vocabulary with <b>byte-pair encoding</b>: start from single characters and repeatedly merge the most frequent adjacent pair, until the vocabulary hits its target size — tens of thousands of pieces. Frequent words earn their own token; rare words get spelled out in chunks, so <i>any</i> text can be represented. Rule of thumb: about 4 characters ≈ 1 token in English. The tokenizer is frozen before training and shared by the model forever — which is why a model can never learn a new word's spelling after the fact.</p>
       </div>
     </div>
   </article>
@@ -71,7 +71,7 @@
       <p class="plain">Each token ID is looked up in a huge table that converts it into a long list of numbers — a <b>vector</b> — capturing something about the word's meaning. <i>King</i> lands near <i>queen</i> and far from <i>carburetor</i>. Then position information is folded in, because <i>dog bites man</i> and <i>man bites dog</i> use identical tokens in a different order.</p>
       <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
       <div class="deeper" hidden>
-        <p>The lookup table is the <b>embedding matrix</b> — vocabulary-size × model-width, thousands of numbers per token in real models — and it is <i>learned</i> during training: words appearing in similar contexts get pushed together. Position used to be added as fixed sine waves or learned offsets; modern models bake rotation into the attention step itself (<b>RoPE</b>). The resulting vector joins the <b>residual stream</b>: one vector per token that flows through the entire network, refined at every block.</p>
+        <p>The lookup table is the <b>embedding matrix</b> — vocabulary-size × model-width, thousands of numbers per token in real models — and it is <i>learned</i> during training: words appearing in similar contexts get pushed together. Position used to be added as fixed sine waves or learned offsets; modern models bake rotation into the attention step itself (<b>RoPE</b>) — and stretch it to huge contexts with rescaling tricks like <b>YaRN</b>, one way open models reach quarter-million-token windows. The resulting vector joins the <b>residual stream</b>: one vector per token that flows through the entire network, refined at every block.</p>
       </div>
     </div>
   </article>
@@ -111,7 +111,7 @@
           </div>
           <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
           <div class="deeper" hidden>
-            <p>For input matrix X, each head computes Q=XW<sub>Q</sub>, K=XW<sub>K</sub>, V=XW<sub>V</sub>; scores = QK<sup>T</sup>/√d<sub>k</sub>; a <b>causal mask</b> blanks out future positions — a token may only attend to the left, which is what makes step-by-step generation possible; softmax turns each row of scores into weights; output = weights·V. The pairwise comparison is why attention costs grow with the square of sequence length — the famous O(n²) bottleneck.</p>
+            <p>For input matrix X, each head computes Q=XW<sub>Q</sub>, K=XW<sub>K</sub>, V=XW<sub>V</sub>; scores = QK<sup>T</sup>/√d<sub>k</sub>; a <b>causal mask</b> blanks out future positions — a token may only attend to the left, which is what makes step-by-step generation possible; softmax turns each row of scores into weights; output = weights·V. The pairwise comparison is why attention costs grow with the square of sequence length — the famous O(n²) bottleneck, and the reason frontier labs now compress it: <b>latent attention</b> (MLA) or <b>sparse attention</b> that skips most of the distant past, unlocking million-token contexts.</p>
           </div>
         </div>
       </div>
@@ -125,7 +125,7 @@
           <p class="plain">One attention pattern isn't enough, so each block runs many <b>in parallel</b> — called heads. One head might link pronouns to nouns, another might track verb tense, a third might watch punctuation. Their outputs are glued back together into a single vector.</p>
           <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
           <div class="deeper" hidden>
-            <p>Each head gets its own W<sub>Q</sub>, W<sub>K</sub>, W<sub>V</sub>, projecting to a smaller width d<sub>k</sub> = d<sub>model</sub>/h (GPT-3: 96 heads × 128 dims each). All heads run simultaneously on the same input; their results are concatenated and re-projected with W<sub>O</sub>. Heads genuinely specialize during training — researchers have found heads that do nothing but resolve pronouns or match opening brackets to closing ones.</p>
+            <p>Each head gets its own W<sub>Q</sub>, W<sub>K</sub>, W<sub>V</sub>, projecting to a smaller width d<sub>k</sub> = d<sub>model</sub>/h (GPT-3: 96 heads × 128 dims each). All heads run simultaneously on the same input; their results are concatenated and re-projected with W<sub>O</sub>. Most modern models also share key/value heads across query groups (<b>grouped-query attention</b>), shrinking the memory cache several-fold for nearly free. Heads genuinely specialize during training — researchers have found heads that do nothing but resolve pronouns or match opening brackets to closing ones.</p>
           </div>
         </div>
       </div>
@@ -139,7 +139,7 @@
           <p class="plain">Attention mixes information <i>between</i> tokens; the feed-forward network works on each token <i>alone</i>. It's a tiny two-layer neural net applied to every position identically — and it's where most of the model's factual “knowledge” lives, as millions of learned associations.</p>
           <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
           <div class="deeper" hidden>
-            <p>FFN(x) = W<sub>2</sub>·GELU(W<sub>1</sub>x): the vector is expanded to about 4× width, passed through a nonlinearity, and squeezed back down. Roughly two-thirds of a transformer's parameters sit in these layers. A useful mental image: the first matrix detects patterns (“this looks like a capital-city context”), the second writes the conclusion back into the vector.</p>
+            <p>FFN(x) = W<sub>2</sub>·SwiGLU(W<sub>1</sub>x) in most modern models: the vector is expanded to a few times its width, passed through a gated nonlinearity, and squeezed back down. Roughly two-thirds of a transformer's parameters sit in these layers. A useful mental image: the first matrix detects patterns (“this looks like a capital-city context”), the second writes the conclusion back into the vector.</p>
           </div>
         </div>
       </div>
@@ -161,6 +161,7 @@
       <button class="deeper-toggle" aria-expanded="false"><span>Go deeper on the stack</span><span class="chev sm" aria-hidden="true"></span></button>
       <div class="deeper" hidden>
         <p>Every block has the same two moves — multi-head self-attention, then the feed-forward net — each in a residual + normalization sandwich. Blocks share a shape but not weights, so early blocks tend to handle surface patterns (word shape, grammar) while later blocks handle abstract ones (logic, long-range references). Nearly all of the model's parameters — and nearly all the compute — live in this stack.</p>
+        <p>One more 2024–2026 twist: the biggest models are <b>mixture-of-experts</b>. Each block's feed-forward net is split into dozens or hundreds of specialist sub-networks (“experts”), and a tiny router wakes only a handful per token — plus one shared expert that always runs. Moonshot's open-weight Kimi K2 reports about a trillion total parameters with only ~32B active per token; DeepSeek's V4-Pro reports ~1.6T total with ~49B active. Parameters scale up; the bill per token barely moves.</p>
       </div>
     </div>
   </article>
@@ -238,7 +239,7 @@
       </div>
       <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
       <div class="deeper" hidden>
-        <p>Temperature T rescales the logits before softmax: p<sub>i</sub> ∝ e<sup>z<sub>i</sub>/T</sup>. As T→0 this approaches argmax — greedy decoding, always the top token; T=1 leaves probabilities untouched; T&gt;1 flattens them. <b>Top-k</b> keeps only the k highest-scoring tokens; <b>top-p</b> (nucleus sampling) keeps the smallest set whose probabilities sum to p. Chatbots typically sample around T≈0.7 with top-p≈0.9: lively, but the truly weird options never get a ticket.</p>
+        <p>Temperature T rescales the logits before softmax: p<sub>i</sub> ∝ e<sup>z<sub>i</sub>/T</sup>. As T→0 this approaches argmax — greedy decoding, always the top token; T=1 leaves probabilities untouched; T&gt;1 flattens them. <b>Top-k</b> keeps only the k highest-scoring tokens; <b>top-p</b> (nucleus sampling) keeps the smallest set whose probabilities sum to p. Chatbots typically sample around T≈0.7 with top-p≈0.9: lively, but the truly weird options never get a ticket. Reasoning models add one more knob — <b>thinking effort</b> (low → max in current APIs): how many tokens the model may spend reasoning before it answers. More thinking, better answers, bigger bill — inference-time compute as a dial, not a fixed cost.</p>
       </div>
     </div>
   </article>
@@ -260,7 +261,7 @@
       </div>
       <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
       <div class="deeper" hidden>
-        <p>Recomputing everything each step would be quadratic; the <b>KV cache</b> avoids it by saving every token's keys and values after its first pass, so each new step only computes the newcomer. The <b>context window</b> is how many tokens the model can juggle at once — a few thousand in early models, hundreds of thousands in modern ones; past the limit, the oldest tokens fall off. Generation halts on a learned end-of-text token or a length cap.</p>
+        <p>Recomputing everything each step would be quadratic; the <b>KV cache</b> avoids it by saving every token's keys and values after its first pass, so each new step only computes the newcomer. The <b>context window</b> is how many tokens the model can juggle at once — a few thousand in early models, a <b>million</b> in current frontier ones, afforded by the compressed-attention tricks from stage 3; past the limit, the oldest tokens fall off. Generation halts on a learned end-of-text token or a length cap. And the loop no longer runs alone: modern systems call <b>tools</b> mid-generation — running code, searching the web, checking a calculator — which multiplies what the raw next-token engine can do without changing its weights.</p>
       </div>
     </div>
   </article>
@@ -271,7 +272,7 @@
 <section class="learned" aria-label="How the model learned">
   <p class="kicker">Separate track</p>
   <h2>How it learned</h2>
-  <p class="lede-sm">Nothing above was programmed. Every matrix in this diagram started as random noise. Training shaped them — in three phases.</p>
+  <p class="lede-sm">Nothing above was programmed. Every matrix in this diagram started as random noise. Training shaped them — in four phases, the recipe every frontier lab now follows.</p>
 
   <article class="node" id="st-pretrain">
     <button class="node-head" aria-expanded="false" aria-controls="st-pretrain-body">
@@ -286,7 +287,7 @@
       <p class="plain">The model reads an enormous slice of the internet — books, articles, code, forums — with a single job: <b>predict the next word</b>, over and over. Every wrong guess nudges its billions of numbers a hair in the right direction. Grammar, facts, even reasoning patterns emerge as side effects of getting really, really good at next-word prediction.</p>
       <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
       <div class="deeper" hidden>
-        <p>This is <b>self-supervised learning</b>: the data labels itself, because the next word is always right there in the text — no human annotation needed. The loss is <b>cross-entropy</b> between the predicted and actual next token. Scale is the story: frontier runs train on trillions of tokens with hundreds of billions of parameters, costing tens of millions of dollars in compute — and capabilities nobody explicitly taught tend to <b>emerge</b> past certain scales.</p>
+        <p>This is <b>self-supervised learning</b>: the data labels itself, because the next word is always right there in the text — no human annotation needed. The loss is <b>cross-entropy</b> between the predicted and actual next token. Scale is the story: frontier runs now train on <b>tens of trillions</b> of tokens — open labs report 15T+ for Kimi K2, 30T+ for DeepSeek V4 — with up to trillions of parameters, costing tens of millions of dollars in compute — and capabilities nobody explicitly taught tend to <b>emerge</b> past certain scales.</p>
       </div>
     </div>
   </article>
@@ -304,14 +305,32 @@
       <p class="plain">A pretrained model is a brilliant mimic with no manners — ask it a question and it might just continue it with five more questions. <b>Fine-tuning</b> trains it further on curated examples: instructions paired with good responses. It learns the <i>shape</i> of being helpful — answer the question, follow the format, hold the tone.</p>
       <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
       <div class="deeper" hidden>
-        <p>Usually <b>supervised fine-tuning (SFT)</b> on tens of thousands of high-quality demonstrations. Same next-token objective, new data distribution. It's cheap next to pretraining — hours to days — but it decisively steers behavior. Most of what you experience as “the assistant's personality” is set here, not in pretraining.</p>
+        <p>Usually <b>supervised fine-tuning (SFT)</b> on tens of thousands of high-quality demonstrations. Same next-token objective, new data distribution. It's cheap next to pretraining — hours to days — but it decisively steers behavior. Since 2025 the recipe has partly flipped: labs now grow behaviors with reinforcement learning <i>first</i> (next stage), then use SFT to distill the best of those behaviors back into the model. Most of what you experience as “the assistant's personality” is still set here, not in pretraining.</p>
+      </div>
+    </div>
+  </article>
+
+  <article class="node" id="st-reasonrl">
+    <button class="node-head" aria-expanded="false" aria-controls="st-reasonrl-body">
+      <span class="num alt" aria-hidden="true">C</span>
+      <span class="head-text">
+        <span class="stage-name">Reasoning with RL</span>
+        <span class="teaser">Taught to think by checking its work.</span>
+      </span>
+      <span class="chev" aria-hidden="true"></span>
+    </button>
+    <div class="node-body" id="st-reasonrl-body" hidden>
+      <p class="plain">Some answers can be <b>checked</b> — a math proof, a program that runs, a tool call that succeeds. So the lab lets the model attempt thousands of problems, rewards the tries that get verifiably <i>right</i> answers, and reinforces the long chains of thought that led there. Nobody writes out the reasoning for it; the model discovers working thought patterns through trial, error, and a scoreboard. This is the breakthrough behind every “thinking” model since 2025 — and open labs publish the recipe: DeepSeek's R1 proved it to the world, and Moonshot's Kimi models pushed it into agentic tool use, training with thousands of real tools in sandboxes.</p>
+      <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
+      <div class="deeper" hidden>
+        <p>The technique is <b>RLVR</b> — reinforcement learning with <i>verifiable</i> rewards. No human judges, no learned reward model: the reward is “did the code pass its tests?” Variants of the GRPO algorithm update the model toward attempts that beat the average of their group. The usual recipe: a little supervised fine-tuning on long reasoning examples to cold-start the behavior, then large-scale RL, then distilling the best traces back with SFT. The newest models even blend thinking and non-thinking in one set of weights, with reasoning switched on or off per request.</p>
       </div>
     </div>
   </article>
 
   <article class="node" id="st-rlhf">
     <button class="node-head" aria-expanded="false" aria-controls="st-rlhf-body">
-      <span class="num alt" aria-hidden="true">C</span>
+      <span class="num alt" aria-hidden="true">D</span>
       <span class="head-text">
         <span class="stage-name">RLHF <span class="amp">/</span> alignment</span>
         <span class="teaser">Steered toward what humans prefer.</span>
@@ -319,10 +338,10 @@
       <span class="chev" aria-hidden="true"></span>
     </button>
     <div class="node-body" id="st-rlhf-body" hidden>
-      <p class="plain">Finally, humans rank several candidate answers from best to worst. A separate <b>reward model</b> learns to predict those human preferences, and the language model is tuned to score highly on it. This is the layer that teaches it to refuse harmful requests, admit uncertainty, and generally act aligned with what people want.</p>
+      <p class="plain">Some things can't be checked with a scoreboard — taste, tone, honesty, safety. Here humans rank several candidate answers from best to worst, a <b>reward model</b> learns to predict those preferences, and the language model is tuned to score highly on it. This is the layer that teaches it to refuse harmful requests, admit uncertainty, and generally act like the assistant you want to talk to.</p>
       <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
       <div class="deeper" hidden>
-        <p><b>RLHF</b> — reinforcement learning from human feedback (modern variants like DPO skip the RL and optimize preferences directly). The model is nudged, not rewritten, toward preferred outputs, with a penalty for drifting too far from its fine-tuned self (the KL constraint) — which keeps it from gaming the reward model into nonsense. Alignment is steering, not a guarantee: it's why the model <i>usually</i> refuses, not a proof that it always will.</p>
+        <p><b>RLHF</b> — reinforcement learning from human feedback (modern variants like DPO skip the RL and optimize preferences directly). The model is nudged, not rewritten, toward preferred outputs, with a penalty for drifting too far from its tuned self (the KL constraint) — which keeps it from gaming the reward model into nonsense. In the 2026 recipe this stage handles <i>preference</i> — style, safety, helpfulness — while raw reasoning ability increasingly comes from the verifiable-reward stage before it. Alignment is steering, not a guarantee: it's why the model <i>usually</i> refuses, not a proof that it always will.</p>
       </div>
     </div>
   </article>
@@ -331,7 +350,7 @@
 
 <footer>
   <p class="fine">The three playgrounds are <b>simplified illustrations</b> — real algorithms running on toy-scale data, entirely in your browser. No servers, no tracking, no data leaves your device. The math is the same math the big models use; only the scale differs.</p>
-  <p class="fine dim">A handmade explainer · set in system type · drawn with CSS</p>
+  <p class="fine dim">A handmade explainer · set in system type · drawn with CSS · model notes current as of September 2026</p>
 </footer>
 
 <script src="app.js"></script>

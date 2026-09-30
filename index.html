@@ -64,6 +64,7 @@
       </figure>
 
 <section class="pipeline" aria-label="The LLM pipeline, top to bottom">
+  <span class="pulse" aria-hidden="true"></span><span class="pulse p2" aria-hidden="true"></span><span class="pulse p3" aria-hidden="true"></span>
 
   <!-- 1 · TOKENIZER -->
   <article class="node" id="st-tokenizer">
@@ -80,13 +81,23 @@
       <div class="demo">
         <p class="demo-label">Simplified illustration · live toy model</p>
         <h3>Tokenizer playground</h3>
-        <p class="demo-note">A genuine byte-pair encoding (BPE), trained right here in your browser on 31 tiny sentences — a toy vocabulary of 71 pieces. GPT's real tokenizer learns the same way, at vastly larger scale.</p>
+        <p class="demo-note" id="tok-note">A genuine byte-pair encoding (BPE), trained right here in your browser on 49 tiny sentences — a toy vocabulary of 75 pieces. GPT's real tokenizer learns the same way, at vastly larger scale.</p>
         <label class="field">
           <span>Type something <em>(toy vocab: a–z and spaces only)</em></span>
-          <input id="tok-input" type="text" value="the cat sat on the mat" maxlength="120" autocomplete="off" autocapitalize="off" spellcheck="false">
+          <input id="tok-input" type="text" value="unbelievable" maxlength="120" autocomplete="off" autocapitalize="off" spellcheck="false">
         </label>
         <div class="tok-out" id="tok-out" aria-live="polite"></div>
         <p class="tok-stats" id="tok-stats"></p>
+        <div class="merge-wrap">
+          <p class="merge-title">Merge trace for “<span id="merge-word">unbelievable</span>” <em>— every BPE merge, in order</em></p>
+          <div class="merge-steps" id="merge-steps"></div>
+          <div class="merge-ctrl">
+            <button type="button" class="ghost-btn" id="merge-play">▶ Play merges</button>
+            <button type="button" class="ghost-btn" id="merge-step">Step →</button>
+            <button type="button" class="ghost-btn" id="merge-back">← Back</button>
+            <button type="button" class="ghost-btn" id="merge-reset">Reset</button>
+          </div>
+        </div>
       </div>
       <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
       <div class="deeper" hidden>
@@ -107,6 +118,13 @@
     </button>
     <div class="node-body" id="st-embed-body" hidden>
       <p class="plain">Each token ID is looked up in a huge table that converts it into a long list of numbers — a <b>vector</b> — capturing something about the word's meaning. <i>King</i> lands near <i>queen</i> and far from <i>carburetor</i>. Then position information is folded in, because <i>dog bites man</i> and <i>man bites dog</i> use identical tokens in a different order.</p>
+      <div class="demo">
+        <p class="demo-label">Simplified illustration · toy data</p>
+        <h3>Embedding space in 3D</h3>
+        <p class="demo-note">Every piece of the toy tokenizer's vocabulary, as one point in a (squashed-to-3D) embedding space. No libraries — hand-rolled perspective projection on a canvas.</p>
+        <div class="pc-wrap"><canvas id="pc-canvas"></canvas></div>
+        <p class="pc-read" id="pc-read">Drag to rotate · tap a point to name it.</p>
+      </div>
       <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
       <div class="deeper" hidden>
         <p>The lookup table is the <b>embedding matrix</b> — vocabulary-size × model-width, thousands of numbers per token in real models — and it is <i>learned</i> during training: words appearing in similar contexts get pushed together. Position used to be added as fixed sine waves or learned offsets; modern models bake rotation into the attention step itself (<b>RoPE</b>) — and stretch it to huge contexts with rescaling tricks like <b>YaRN</b>, one way open models reach quarter-million-token windows. The resulting vector joins the <b>residual stream</b>: one vector per token that flows through the entire network, refined at every block.</p>
@@ -335,15 +353,37 @@
         <p class="demo-label">Simplified illustration · real math, toy data</p>
         <h3>Sampling lab</h3>
         <p class="demo-note">Eight candidate next-words with fixed scores. Real softmax, real dice. Drag the temperature down and watch the favorite go inevitable; crank it up and watch chaos.</p>
-        <label class="slider">
-          <span>Temperature <b id="tmp-val">1.00</b></span>
-          <input id="samp-temp" type="range" min="0.1" max="2" step="0.05" value="1" aria-label="Temperature">
-        </label>
-        <label class="slider">
-          <span>Top-k <b id="topk-val">8</b></span>
-          <input id="samp-topk" type="range" min="1" max="8" step="1" value="8" aria-label="Top-k">
-        </label>
-        <div class="bars" id="samp-bars"></div>
+        <div class="cslider-row">
+          <div class="cslider-head"><span>Temperature</span><b id="tmp-val">1.00</b></div>
+          <div class="cslider-line">
+            <button type="button" class="stepper" id="tmp-dec" aria-label="Lower temperature">−</button>
+            <div class="cslider" id="sl-temp" role="slider" tabindex="0" aria-label="Temperature" aria-valuemin="0.1" aria-valuemax="2" aria-valuenow="1" aria-valuetext="1.00">
+              <div class="cslider-track"><div class="cslider-fill"></div><div class="cslider-thumb"></div></div>
+            </div>
+            <button type="button" class="stepper" id="tmp-inc" aria-label="Raise temperature">+</button>
+          </div>
+        </div>
+        <div class="cslider-row">
+          <div class="cslider-head"><span>Top-k</span><b id="topk-val">8</b></div>
+          <div class="cslider-line">
+            <button type="button" class="stepper" id="topk-dec" aria-label="Lower top-k">−</button>
+            <div class="cslider" id="sl-topk" role="slider" tabindex="0" aria-label="Top-k" aria-valuemin="1" aria-valuemax="8" aria-valuenow="8" aria-valuetext="8">
+              <div class="cslider-track"><div class="cslider-fill"></div><div class="cslider-thumb"></div></div>
+            </div>
+            <button type="button" class="stepper" id="topk-inc" aria-label="Raise top-k">+</button>
+          </div>
+        </div>
+        <div class="samp-viz">
+          <div class="donut-wrap">
+            <svg id="samp-donut" viewBox="0 0 140 140" role="img" aria-label="Probability wheel">
+              <circle cx="70" cy="70" r="54" fill="none" stroke="rgba(236,231,216,.08)" stroke-width="18"></circle>
+              <g id="donut-segs" transform="rotate(-90 70 70)"></g>
+              <text id="donut-top" x="70" y="67" text-anchor="middle" class="donut-top"></text>
+              <text id="donut-pct" x="70" y="85" text-anchor="middle" class="donut-pct"></text>
+            </svg>
+          </div>
+          <div class="bars" id="samp-bars"></div>
+        </div>
         <div class="samp-row">
           <button type="button" class="btn" id="samp-once">Sample once</button>
           <button type="button" class="btn ghost" id="samp-20">Sample 20×</button>

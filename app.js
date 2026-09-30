@@ -27,7 +27,13 @@ var BPE_CORPUS = [
   "dogs bark loudly","cats sleep all day","the car is red","a big green tree",
   "she sings a song","he draws a picture","we eat lunch","they drink water",
   "the stars shine","rain falls down","snow is white","fire is hot",
-  "ice is cold","the wind blows","leaves fall down","flowers bloom","bees make honey"
+  "ice is cold","the wind blows","leaves fall down","flowers bloom","bees make honey",
+  "the quick brown fox jumps over the lazy dog",
+  "it was unbelievable","an unbelievable story","truly unbelievable",
+  "that is believable","a believable excuse","seems believable to me",
+  "i believe you","believe me","they believe in ghosts",
+  "undo the knot","untie your shoes","that is unfair","an unhappy ending",
+  "jazz music is fun","a fuzzy buzz","quiet quails","box of tricks"
 ];
 var SEP = "\u0001";
 
@@ -41,7 +47,10 @@ function trainBPE(lines, numMerges){
   var splits = new Map();
   freq.forEach(function(f, w){ splits.set(w, w.split("").concat(["</w>"])); });
   var vocab = new Map(), id = 0;
+  /* seed EVERY a-z letter so no input char can ever miss the vocab
+     (a missing letter used to render as "j undefined") */
   var chars = new Set(["</w>"]);
+  "abcdefghijklmnopqrstuvwxyz".split("").forEach(function(ch){ chars.add(ch); });
   freq.forEach(function(f, w){ w.split("").forEach(function(ch){ chars.add(ch); }); });
   Array.from(chars).sort().forEach(function(ch){ vocab.set(ch, id++); });
   var ranks = new Map();
@@ -72,8 +81,12 @@ function trainBPE(lines, numMerges){
   return {vocab:vocab, ranks:ranks};
 }
 
-function bpeEncodeWord(word, ranks){
+/* encode, recording every merge step for the trace visualizer.
+   steps[r] = segmentation BEFORE merge r; the merging pair is at
+   steps[r].bi; steps[last] is the final token list. */
+function bpeEncodeSteps(word, ranks){
   var syms = word.split("").concat(["</w>"]);
+  var steps = [{syms: syms.slice(), bi: -1}];
   for(;;){
     var bi=-1, br=Infinity;
     for(var i=0;i<syms.length-1;i++){
@@ -81,40 +94,170 @@ function bpeEncodeWord(word, ranks){
       if(r!==undefined && r<br){ br=r; bi=i; }
     }
     if(bi<0) break;
+    steps[steps.length-1].bi = bi;
     syms.splice(bi, 2, syms[bi]+syms[bi+1]);
+    steps.push({syms: syms.slice(), bi: -1});
   }
-  return syms;
+  return steps;
+}
+
+function bpeEncodeWord(word, ranks){
+  var steps = bpeEncodeSteps(word, ranks);
+  return steps[steps.length-1].syms;
 }
 
 var bpeModel = trainBPE(BPE_CORPUS, 48);
+
+/* self-test: every a-z letter has an id; round-trip is exact;
+   no emitted piece can ever look up as undefined. */
+function bpeSelfTest(){
+  var bad=[];
+  "abcdefghijklmnopqrstuvwxyz".split("").forEach(function(ch){
+    if(bpeModel.vocab.get(ch)===undefined) bad.push("no id for "+ch);
+  });
+  ["unbelievable","the","cat","fjdjbdjajs","zebra","quiz","jumps","pack"].forEach(function(w){
+    var syms=bpeEncodeWord(w, bpeModel.ranks);
+    syms.forEach(function(s){
+      if(s!=="</w>" && bpeModel.vocab.get(s)===undefined) bad.push("undefined id: "+s);
+    });
+    var dec=syms.join("").replace(/<\/w>/g,"");
+    if(dec!==w) bad.push("round-trip fail: "+w+" -> "+dec);
+  });
+  if(bad.length) console.error("BPE self-test FAILED: "+bad.join("; "));
+  else console.log("BPE self-test passed ("+bpeModel.vocab.size+" pieces)");
+  return bad.length===0;
+}
+bpeSelfTest();
 
 function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
 
 var tokInput=document.getElementById("tok-input"),
     tokOut=document.getElementById("tok-out"),
-    tokStats=document.getElementById("tok-stats");
+    tokStats=document.getElementById("tok-stats"),
+    tokNote=document.getElementById("tok-note"),
+    mergeStepsEl=document.getElementById("merge-steps"),
+    mergeWordEl=document.getElementById("merge-word"),
+    mergePlayBtn=document.getElementById("merge-play");
+if(tokNote){
+  tokNote.innerHTML="A genuine byte-pair encoding (BPE), trained right here in your browser on <b>"+
+    BPE_CORPUS.length+" tiny sentences</b> — a toy vocabulary of <b>"+bpeModel.vocab.size+
+    " pieces</b>. GPT's real tokenizer learns the same way, at vastly larger scale.";
+}
+
+function normalizeInput(text){
+  return text.toLowerCase().split(/\s+/).map(function(w){
+    return w.replace(/[^a-z]/g,"");
+  }).filter(function(w){ return w; });
+}
+
+var mergeData=[], mergeCursor=0, mergeTimer=null;
+
+function stopMergePlay(){
+  if(mergeTimer){ clearInterval(mergeTimer); mergeTimer=null; }
+}
+
+function paintMergeTrace(){
+  if(!mergeData.length){
+    mergeStepsEl.innerHTML='<span style="color:#5f6b88;font-size:13px">type something above…</span>';
+    return;
+  }
+  var html="";
+  for(var r=0;r<mergeData.length;r++){
+    var st=mergeData[r], last=(r===mergeData.length-1);
+    var cls="mrow"+(r>mergeCursor?" dim":"")+(r===mergeCursor?" cur":"");
+    html+='<div class="'+cls+'" data-r="'+r+'"><span class="mnum">'+r+'</span><span class="mchips">';
+    for(var i=0;i<st.syms.length;i++){
+      var s=st.syms[i];
+      if(last && s==="</w>") continue; /* boundary marker: not a chip */
+      var cc, label, idbit="";
+      if(last){ cc="tok final"; }
+      else{ cc="tok char"; if(i===st.bi||i===st.bi+1) cc+=" pair"; else if(r>0&&i===mergeData[r-1].bi) cc+=" new"; }
+      label = (s==="</w>") ? '<span class="eow">␣</span>' : esc(s.replace("</w>",""));
+      if(last) idbit="<i>"+bpeModel.vocab.get(s)+"</i>";
+      html+='<span class="'+cc+'">'+label+idbit+'</span>';
+    }
+    html+='</span></div>';
+  }
+  mergeStepsEl.innerHTML=html;
+  mergePlayBtn.textContent = mergeTimer ? "⏸ Pause" : "▶ Play merges";
+}
+
+function renderMergeTrace(){
+  stopMergePlay();
+  var words=normalizeInput(tokInput.value);
+  var word=words[0]||"";
+  mergeWordEl.textContent = word || "(type something)";
+  mergeData = word ? bpeEncodeSteps(word, bpeModel.ranks) : [];
+  mergeCursor = mergeData.length-1;
+  paintMergeTrace();
+}
+
+mergePlayBtn.addEventListener("click", function(){
+  if(!mergeData.length) return;
+  if(mergeTimer){ stopMergePlay(); paintMergeTrace(); return; }
+  mergeCursor=0; paintMergeTrace();
+  mergeTimer=setInterval(function(){
+    if(mergeCursor>=mergeData.length-1){ stopMergePlay(); paintMergeTrace(); return; }
+    mergeCursor++; paintMergeTrace();
+  },650);
+});
+document.getElementById("merge-step").addEventListener("click", function(){
+  if(!mergeData.length) return;
+  stopMergePlay();
+  mergeCursor=Math.min(mergeCursor+1, mergeData.length-1);
+  paintMergeTrace();
+});
+document.getElementById("merge-back").addEventListener("click", function(){
+  if(!mergeData.length) return;
+  stopMergePlay();
+  mergeCursor=Math.max(mergeCursor-1, 0);
+  paintMergeTrace();
+});
+document.getElementById("merge-reset").addEventListener("click", function(){
+  if(!mergeData.length) return;
+  stopMergePlay();
+  mergeCursor=0;
+  paintMergeTrace();
+});
+mergeStepsEl.addEventListener("click", function(e){
+  var row=e.target.closest(".mrow"); if(!row||!mergeData.length) return;
+  stopMergePlay();
+  mergeCursor=+row.getAttribute("data-r");
+  paintMergeTrace();
+});
 
 function renderTokens(){
   var text = tokInput.value;
-  var toks=[];
-  text.toLowerCase().split(/\s+/).forEach(function(w){
-    var clean=w.replace(/[^a-z]/g,"");
-    if(!clean) return;
-    bpeEncodeWord(clean, bpeModel.ranks).forEach(function(s){
-      toks.push({t:s, id:bpeModel.vocab.get(s)});
-    });
-  });
-  if(!toks.length){
+  var words = normalizeInput(text);
+  renderMergeTrace();
+  if(!words.length){
     tokOut.innerHTML='<span style="color:#5f6b88;font-size:13px">type a–z letters above…</span>';
     tokStats.textContent="";
     return;
   }
+  var toks=[];
+  words.forEach(function(w){
+    bpeEncodeWord(w, bpeModel.ranks).forEach(function(s){
+      if(s==="</w>") return; /* boundary marker: word break only, not a chip */
+      var id=bpeModel.vocab.get(s);
+      if(id===undefined){ id="?"; console.error("token without id: "+s); }
+      toks.push({t:s, id:id});
+    });
+  });
   tokOut.innerHTML = toks.map(function(tk){
-    return '<span class="tok">'+esc(tk.t.replace("</w>",""))+'<i>'+tk.id+'</i></span>';
+    return '<span class="tok final">'+esc(tk.t.replace("</w>",""))+'<i>'+tk.id+'</i></span>';
   }).join("");
-  var chars=text.replace(/\s/g,"").replace(/[^a-zA-Z]/g,"").length;
-  tokStats.innerHTML = "<b>"+toks.length+"</b> tokens · "+chars+" letters · vocab <b>"+bpeModel.vocab.size+"</b> pieces · "+
-    "decodes back to: “"+esc(toks.map(function(tk){return tk.t;}).join("").replace(/<\/w>/g," ").trim())+"”";
+  /* decode is exact by construction (encode is lossless over a-z words);
+     assert it, and explain the one normalization the input goes through. */
+  var decoded = words.map(function(w){
+    return bpeEncodeWord(w, bpeModel.ranks).join("").replace(/<\/w>/g,"");
+  }).join(" ");
+  console.assert(decoded===words.join(" "), "tokenizer decode mismatch");
+  var normNote = /[^a-z\s]/.test(text)
+    ? '<span class="norm-note">input normalized: lowercase a–z and single spaces (punctuation &amp; other characters are dropped before tokenizing)</span>' : "";
+  var letters = words.join("").length;
+  tokStats.innerHTML = "<b>"+toks.length+"</b> tokens · "+letters+" letters · vocab <b>"+bpeModel.vocab.size+"</b> pieces · "+
+    "decodes back to: “"+esc(decoded)+"” <span class='ok'>✓ exact</span>"+normNote;
 }
 var tokT=null;
 tokInput.addEventListener("input", function(){ clearTimeout(tokT); tokT=setTimeout(renderTokens,120); });
@@ -215,17 +358,220 @@ document.getElementById("attn-shuffle").addEventListener("click", function(){
 renderAttention();
 
 /* ============================================================
+   DEMO 2b · 3D embedding point cloud (hand-rolled projection,
+   no libraries — one point per toy-vocab piece)
+   ============================================================ */
+(function(){
+  var cv=document.getElementById("pc-canvas"); if(!cv) return;
+  var ctx=cv.getContext("2d");
+  var read=document.getElementById("pc-read");
+  function h32(s){
+    var h=2166136261;
+    for(var i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); }
+    return h>>>0;
+  }
+  var pts=[];
+  bpeModel.vocab.forEach(function(id, tok){
+    if(tok==="</w>") return;
+    var rnd=mulberry32(h32(tok)||1), v=[];
+    for(var i=0;i<8;i++) v.push(rnd()*2-1);
+    pts.push({tok:tok, id:id, v:v, p:{x:0,y:0,z:0}, sx:0, sy:0, sc:1, depth:0});
+  });
+  /* fixed random 8D -> 3D projection, then normalize to unit sphere */
+  var prnd=mulberry32(20260930), P=[];
+  for(var r=0;r<3;r++){ var prow=[]; for(var c=0;c<8;c++) prow.push(prnd()*2-1); P.push(prow); }
+  pts.forEach(function(pt){
+    var x=0,y=0,z=0,r2,c2,s;
+    for(r2=0;r2<3;r2++){ s=0; for(c2=0;c2<8;c2++) s+=P[r2][c2]*pt.v[c2];
+      if(r2===0)x=s; else if(r2===1)y=s; else z=s; }
+    var n=Math.sqrt(x*x+y*y+z*z)||1;
+    pt.p={x:x/n, y:y/n, z:z/n};
+  });
+  var W=0,H=260,dpr=1,yaw=0.7,pitch=0.42,visible=false,dragging=false,
+      lastAct=0,sel=-1,rafOn=false,sized=false;
+  function resize(){
+    var wrap=cv.parentElement;
+    dpr=Math.min(window.devicePixelRatio||1,2);
+    W=Math.max(wrap.clientWidth,200); H=260;
+    cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr);
+    cv.style.width=W+"px"; cv.style.height=H+"px";
+  }
+  function project(){
+    var cyw=Math.cos(yaw),syw=Math.sin(yaw),cxp=Math.cos(pitch),sxp=Math.sin(pitch);
+    var R=Math.min(W,H)*0.44, persp=3.2, ox=W/2, oy=H/2;
+    pts.forEach(function(pt){
+      var x=pt.p.x,y=pt.p.y,z=pt.p.z;
+      var x1=x*cyw+z*syw, z1=-x*syw+z*cyw;
+      var y1=y*cxp-z1*sxp, z2=y*sxp+z1*cxp;
+      var s=persp/(persp+z2);
+      pt.sx=ox+x1*R*s; pt.sy=oy-y1*R*s; pt.sc=s; pt.depth=z2;
+    });
+  }
+  function draw(){
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.clearRect(0,0,W,H);
+    var order=pts.map(function(p,i){return i;})
+      .sort(function(a,b){return pts[a].depth-pts[b].depth;});
+    order.forEach(function(i){
+      var pt=pts[i];
+      var a=0.30+0.70*(pt.sc-0.62)/1.0;
+      a=Math.max(0.22,Math.min(1,a));
+      ctx.beginPath();
+      ctx.arc(pt.sx,pt.sy,2+2.2*pt.sc,0,6.2832);
+      if(i===sel){
+        ctx.fillStyle="#e9a13b"; ctx.shadowColor="#e9a13b"; ctx.shadowBlur=12;
+      }else{
+        ctx.fillStyle="rgba(98,182,164,"+a.toFixed(2)+")"; ctx.shadowBlur=0;
+      }
+      ctx.fill(); ctx.shadowBlur=0;
+    });
+  }
+  function frame(){
+    if(!visible){ rafOn=false; return; }
+    if(!dragging && Date.now()-lastAct>3000) yaw+=0.0045; /* gentle auto-rotate */
+    project(); draw();
+    requestAnimationFrame(frame);
+  }
+  function kick(){ if(visible && !rafOn){ rafOn=true; requestAnimationFrame(frame); } }
+  var px0=0,py0=0,moved=0;
+  cv.addEventListener("pointerdown",function(e){
+    dragging=true; px0=e.clientX; py0=e.clientY; moved=0; lastAct=Date.now();
+    try{cv.setPointerCapture(e.pointerId);}catch(_){}
+    e.preventDefault();
+  });
+  cv.addEventListener("pointermove",function(e){
+    if(!dragging) return;
+    var dx=e.clientX-px0, dy=e.clientY-py0;
+    moved+=Math.abs(dx)+Math.abs(dy);
+    yaw+=dx*0.008;
+    pitch=Math.max(-1.2,Math.min(1.2,pitch+dy*0.006));
+    px0=e.clientX; py0=e.clientY; lastAct=Date.now();
+  });
+  function endDrag(e){
+    if(dragging && moved<8){ /* tap: name the nearest point */
+      var r=cv.getBoundingClientRect(), mx=e.clientX-r.left, my=e.clientY-r.top;
+      var best=-1, bd=30*30;
+      pts.forEach(function(pt,i){
+        var d=(pt.sx-mx)*(pt.sx-mx)+(pt.sy-my)*(pt.sy-my);
+        if(d<bd){ bd=d; best=i; }
+      });
+      sel=best; lastAct=Date.now();
+      if(best>=0) read.innerHTML="Token <b>“"+esc(pts[best].tok.replace("</w>",""))+"”</b> · id <b>"+pts[best].id+"</b> — one of "+pts.length+" pieces in the toy vocabulary.";
+      else read.textContent="Drag to rotate · tap a point to name it.";
+    }
+    dragging=false;
+  }
+  cv.addEventListener("pointerup",endDrag);
+  cv.addEventListener("pointercancel",function(){ dragging=false; });
+  new IntersectionObserver(function(es){
+    es.forEach(function(en){
+      visible=en.isIntersecting;
+      if(visible){ if(!sized){ resize(); sized=true; } kick(); }
+    });
+  },{threshold:0.05}).observe(cv);
+  window.addEventListener("resize",function(){ if(sized) resize(); });
+})();
+
+/* ============================================================
    DEMO 3 · sampling lab: real softmax + temperature + top-k
    ============================================================ */
 var CANDS=[[" the",2.2],[" cat",1.5],[" dog",1.2],[" mat",0.8],
            [" moon",0.1],[" zebra",-0.6],[" quantum",-1.2],[" banana",-2.1]];
-var sampTemp=document.getElementById("samp-temp"),
-    sampTopk=document.getElementById("samp-topk"),
-    tmpVal=document.getElementById("tmp-val"),
+var tmpVal=document.getElementById("tmp-val"),
     topkVal=document.getElementById("topk-val"),
     bars=document.getElementById("samp-bars"),
     pick=document.getElementById("samp-pick"),
     seq=document.getElementById("samp-seq");
+
+/* Touch-friendly slider: the whole track row is tappable (pointerdown
+   computes the value from the x position), drag keeps working, the
+   thumb sits in a 44px+ touch target, and touch-action:none means a
+   drag can never scroll the page. Keyboard: arrows/Home/End. */
+function makeSlider(id, opts){
+  var el=document.getElementById(id),
+      track=el.querySelector(".cslider-track"),
+      fill=el.querySelector(".cslider-fill"),
+      thumb=el.querySelector(".cslider-thumb");
+  var S={min:opts.min,max:opts.max,step:opts.step,value:opts.value,
+         onChange:opts.onChange||function(){}};
+  function fmt(v){ return opts.step<1 ? v.toFixed(2) : String(Math.round(v)); }
+  function render(){
+    var t=(S.value-S.min)/(S.max-S.min);
+    fill.style.width=(t*100)+"%";
+    thumb.style.left=(t*100)+"%";
+    el.setAttribute("aria-valuenow",S.value);
+    el.setAttribute("aria-valuetext",fmt(S.value));
+  }
+  function set(v,fire){
+    v=Math.min(S.max,Math.max(S.min,v));
+    v=Math.round(v/S.step)*S.step;
+    v=Math.round(v*1000)/1000; /* float hygiene */
+    if(v===S.value){ render(); return; }
+    S.value=v; render();
+    if(fire!==false) S.onChange(S.value);
+  }
+  S.set=set;
+  function fromX(cx){
+    var r=track.getBoundingClientRect();
+    set(S.min+((cx-r.left)/r.width)*(S.max-S.min));
+  }
+  var dragging=false;
+  el.addEventListener("pointerdown",function(e){
+    dragging=true;
+    try{el.setPointerCapture(e.pointerId);}catch(_){}
+    fromX(e.clientX);
+    e.preventDefault();
+  });
+  el.addEventListener("pointermove",function(e){ if(dragging) fromX(e.clientX); });
+  el.addEventListener("pointerup",function(){ dragging=false; });
+  el.addEventListener("pointercancel",function(){ dragging=false; });
+  el.addEventListener("keydown",function(e){
+    var d=0;
+    if(e.key==="ArrowLeft"||e.key==="ArrowDown") d=-S.step;
+    else if(e.key==="ArrowRight"||e.key==="ArrowUp") d=S.step;
+    else if(e.key==="Home"){ set(S.min); e.preventDefault(); return; }
+    else if(e.key==="End"){ set(S.max); e.preventDefault(); return; }
+    else return;
+    set(S.value+d); e.preventDefault();
+  });
+  render();
+  return S;
+}
+
+/* donut / probability-wheel view of the same distribution */
+var donutSegs=document.getElementById("donut-segs"),
+    donutTop=document.getElementById("donut-top"),
+    donutPct=document.getElementById("donut-pct"),
+    donutCircles=[];
+(function(){
+  var NS="http://www.w3.org/2000/svg";
+  for(var i=0;i<CANDS.length;i++){
+    var c=document.createElementNS(NS,"circle");
+    c.setAttribute("cx",70); c.setAttribute("cy",70); c.setAttribute("r",54);
+    c.setAttribute("fill","none"); c.setAttribute("stroke-width",18);
+    donutSegs.appendChild(c); donutCircles.push(c);
+  }
+})();
+function renderDonut(r){
+  var C=2*Math.PI*54, acc=0, pmax=1e-4, topI=0, i;
+  for(i=0;i<CANDS.length;i++) if(r.keep[i]&&r.probs[i]>pmax){ pmax=r.probs[i]; topI=i; }
+  for(i=0;i<CANDS.length;i++){
+    var frac=r.keep[i]?r.probs[i]:0;
+    var len=Math.max(frac*C-2.5,0);
+    var c=donutCircles[i];
+    c.setAttribute("stroke-dasharray",len.toFixed(1)+" "+C.toFixed(1));
+    c.setAttribute("stroke-dashoffset",(-acc*C).toFixed(1));
+    c.setAttribute("stroke","#e9a13b");
+    c.setAttribute("stroke-opacity",r.keep[i]?(0.35+0.65*(r.probs[i]/pmax)).toFixed(2):"0");
+    acc+=frac;
+  }
+  donutTop.textContent="“"+CANDS[topI][0].trim()+"”";
+  donutPct.textContent=(r.probs[topI]*100).toFixed(1)+"%";
+}
+function renderLab(){
+  var r=renderBars();
+  renderDonut(r);
+}
 
 function softmax(logits){
   var m=Math.max.apply(null,logits);
@@ -234,7 +580,7 @@ function softmax(logits){
   return ex.map(function(e){return e/s;});
 }
 function currentProbs(){
-  var k=+sampTopk.value, T=+sampTemp.value;
+  var k=SL.topk.value, T=SL.temp.value;
   var order=CANDS.map(function(c,i){return i;})
     .sort(function(a,b){return CANDS[b][1]-CANDS[a][1];}).slice(0,k);
   var keep={}; order.forEach(function(i){keep[i]=1;});
@@ -250,8 +596,8 @@ function currentProbs(){
 }
 function renderBars(){
   var r=currentProbs();
-  tmpVal.textContent=(+sampTemp.value).toFixed(2);
-  topkVal.textContent=sampTopk.value;
+  tmpVal.textContent=SL.temp.value.toFixed(2);
+  topkVal.textContent=SL.topk.value;
   bars.innerHTML=CANDS.map(function(c,i){
     var p=r.probs[i], cut=!r.keep[i];
     return '<div class="bar-row'+(cut?' cut':'')+'">'+
@@ -274,13 +620,19 @@ function sampleOnce(){
   seq.appendChild(chip);
   while(seq.children.length>48) seq.removeChild(seq.firstChild);
 }
-sampTemp.addEventListener("input", renderBars);
-sampTopk.addEventListener("input", renderBars);
+var SL={
+  temp:makeSlider("sl-temp",{min:0.1,max:2,step:0.05,value:1,onChange:renderLab}),
+  topk:makeSlider("sl-topk",{min:1,max:8,step:1,value:8,onChange:renderLab})
+};
+document.getElementById("tmp-dec").addEventListener("click",function(){ SL.temp.set(SL.temp.value-0.05); });
+document.getElementById("tmp-inc").addEventListener("click",function(){ SL.temp.set(SL.temp.value+0.05); });
+document.getElementById("topk-dec").addEventListener("click",function(){ SL.topk.set(SL.topk.value-1); });
+document.getElementById("topk-inc").addEventListener("click",function(){ SL.topk.set(SL.topk.value+1); });
 document.getElementById("samp-once").addEventListener("click", sampleOnce);
 document.getElementById("samp-20").addEventListener("click", function(){ for(var n=0;n<20;n++) sampleOnce(); });
 document.getElementById("samp-clear").addEventListener("click", function(){
   seq.innerHTML=""; pick.textContent="Press “Sample once”.";
 });
-renderBars();
+renderLab();
 
 })();

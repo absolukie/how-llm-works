@@ -109,6 +109,44 @@
         </div>
         <div class="ex-track" id="tok-ex-track" tabindex="0" role="region" aria-label="Tokenizer examples &mdash; swipe to browse"></div>
       </div>
+      <p class="plain">How close is the toy to the real thing? Closer than it looks: the playground above runs the genuine BPE merge loop — count adjacent pairs, merge the most frequent, repeat — the same core algorithm inside GPT-2's tokenizer, tiktoken's BPE mode, and SentencePiece's BPE mode. The tokenizer family differs in details, not in the idea. Six of them, side by side:</p>
+      <div class="ex-car">
+        <div class="ex-top"><h4>The tokenizer family</h4>
+          <div class="ex-nav"><button type="button" class="ex-prev" aria-label="Previous example">&larr;</button><button type="button" class="ex-next" aria-label="Next example">&rarr;</button></div>
+        </div>
+        <div class="ex-track" tabindex="0" role="region" aria-label="Tokenizer family — swipe to browse">
+          <div class="ex-slide"><div class="ex-card"><div class="ex-body">
+            <p class="ex-kicker">The tokenizer family · real algorithms in use today</p>
+            <p class="ex-input"><b>BPE</b> — the toy's own family</p>
+            <p class="ex-why"><b>Who uses it:</b> GPT-2, RoBERTa (~50k pieces).<br><b>How it works:</b> start from single characters, repeatedly merge the most frequent neighboring pair.<br><b>Vs the toy:</b> the identical algorithm — the only differences are scale (75 tiles vs 50,000) and training data (49 sentences vs half the internet).</p>
+          </div><p class="ex-count">1 / 6</p></div></div>
+          <div class="ex-slide"><div class="ex-card"><div class="ex-body">
+            <p class="ex-kicker">The tokenizer family · real algorithms in use today</p>
+            <p class="ex-input"><b>Byte-level BPE</b> — tiktoken</p>
+            <p class="ex-why"><b>Who uses it:</b> GPT-3.5, GPT-4, GPT-4o (~100k–200k pieces).<br><b>How it works:</b> BPE on raw UTF-8 bytes instead of characters — any text in any language always breaks down cleanly, so there is no “unknown” tile.<br><b>Vs the toy:</b> the same merge loop; the toy drops anything outside a–z, tiktoken never drops a single byte.</p>
+          </div><p class="ex-count">2 / 6</p></div></div>
+          <div class="ex-slide"><div class="ex-card"><div class="ex-body">
+            <p class="ex-kicker">The tokenizer family · real algorithms in use today</p>
+            <p class="ex-input"><b>WordPiece</b></p>
+            <p class="ex-why"><b>Who uses it:</b> BERT (~30k pieces).<br><b>How it works:</b> greedy longest-match from the left; merges are chosen to maximize the likelihood of the training data, not raw pair frequency.<br><b>Vs the toy:</b> the same goal — frequent chunks earn their own tiles — with a different scoreboard for which pair merges.</p>
+          </div><p class="ex-count">3 / 6</p></div></div>
+          <div class="ex-slide"><div class="ex-card"><div class="ex-body">
+            <p class="ex-kicker">The tokenizer family · real algorithms in use today</p>
+            <p class="ex-input"><b>SentencePiece</b></p>
+            <p class="ex-why"><b>Who uses it:</b> LLaMA, Gemma, T5.<br><b>How it works:</b> treats the space as just another character, so it trains on raw text with no pre-splitting — cleaner across languages. Can run BPE or Unigram underneath.<br><b>Vs the toy:</b> the merge engine can be the very same BPE; the upgrade is how spaces are handled.</p>
+          </div><p class="ex-count">4 / 6</p></div></div>
+          <div class="ex-slide"><div class="ex-card"><div class="ex-body">
+            <p class="ex-kicker">The tokenizer family · real algorithms in use today</p>
+            <p class="ex-input"><b>Unigram</b></p>
+            <p class="ex-why"><b>Who uses it:</b> T5, ALBERT.<br><b>How it works:</b> starts with a huge pile of candidate tiles and prunes by probability — each word is split whichever way is most likely, and it can offer several candidate splits.<br><b>Vs the toy:</b> the same destination (probable chunks become tiles), reached by probability instead of frequency counting.</p>
+          </div><p class="ex-count">5 / 6</p></div></div>
+          <div class="ex-slide"><div class="ex-card"><div class="ex-body">
+            <p class="ex-kicker">The tokenizer family · real algorithms in use today</p>
+            <p class="ex-input"><b>Tokenizer-free</b> — the radical option</p>
+            <p class="ex-why"><b>Who uses it:</b> ByT5, CANINE, BLT (Meta, 2024).<br><b>How it works:</b> no fixed tile list at all — the model reads raw bytes or characters and learns its own chunking during training.<br><b>Vs the toy:</b> the opposite bet; proof that a fixed vocabulary is a choice, not a law. The tradeoff: longer sequences and more compute.</p>
+          </div><p class="ex-count">6 / 6</p></div></div>
+        </div>
+      </div>
       <p class="plain">Why should you care how text gets chopped? Three ways it bites in real life. The model can&rsquo;t truly see spelling &mdash; &ldquo;the&rdquo; is one tile but &ldquo;teh&rdquo; is three, so a typo looks like a different word entirely. It can&rsquo;t do arithmetic &mdash; numbers arrive as digit confetti, never as values. And other languages pay more &mdash; English gets roughly a tile per word while Chinese often costs a tile per character, making the same meaning longer, slower, and pricier to process.</p>
       <aside class="takeaway"><p><span class="who">Takeaway</span><b>&ldquo;The model never sees words &mdash; only numbered tiles. &lsquo;Unbelievable&rsquo; is tile 41 + tile 51 to the model, and it has no idea what either &lsquo;means&rsquo; yet.&rdquo;</b></p><p><span class="who">Common misconception</span>Most people think the model reads text like we do &mdash; <b>actually &ldquo;the&rdquo; is a single tile while the typo &ldquo;teh&rdquo; shatters into three, so a one-letter slip looks like a completely different input.</b></p></aside>
       <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
@@ -153,7 +191,7 @@
               <line x1="137" y1="68" x2="243" y2="52" stroke="#98a0b3" stroke-dasharray="4 3"/><text x="192" y="48" text-anchor="middle" fill="#98a0b3" font-size="10" font-family="ui-monospace,monospace">far</text>
             </svg>
             <p class="ex-why"><b>Meaning is distance.</b> Words that show up in similar sentences get pulled together during training. <i>King</i> and <i>queen</i> are neighbors; <i>carburetor</i> lives across town.</p>
-          </div><p class="ex-count">1 / 4</p></div></div>
+          </div><p class="ex-count">1 / 7</p></div></div>
           <div class="ex-slide"><div class="ex-card"><div class="ex-body">
             <p class="ex-kicker">Simplified illustration · sketch, not real data</p>
             <svg class="minisvg" viewBox="0 0 300 130" role="img" aria-label="two clusters: a river cluster and a money cluster, each containing its own bank">
@@ -167,7 +205,7 @@
               <circle cx="250" cy="60" r="6" fill="#e9a13b"/><text x="250" y="82" text-anchor="middle" fill="#ece7d8" font-size="11" font-family="ui-monospace,monospace">bank²</text>
             </svg>
             <p class="ex-why"><b>One spelling, two neighborhoods.</b> <i>Bank</i> sits in the river cluster when the sentence is about water, and in the money cluster when it's about cash. Context picks the address.</p>
-          </div><p class="ex-count">2 / 4</p></div></div>
+          </div><p class="ex-count">2 / 7</p></div></div>
           <div class="ex-slide"><div class="ex-card"><div class="ex-body">
             <p class="ex-kicker">Simplified illustration · sketch, not real data</p>
             <svg class="minisvg" viewBox="0 0 300 130" role="img" aria-label="two sentence points far apart: dog bites man versus man bites dog">
@@ -177,7 +215,7 @@
               <text x="150" y="118" text-anchor="middle" fill="#98a0b3" font-size="10" font-family="ui-monospace,monospace">position stamps make the difference</text>
             </svg>
             <p class="ex-why"><b>Order changes meaning.</b> Identical words, shuffled — and the sentence lands somewhere completely different. Without the position stamp, the model couldn't tell them apart.</p>
-          </div><p class="ex-count">3 / 4</p></div></div>
+          </div><p class="ex-count">3 / 7</p></div></div>
           <div class="ex-slide"><div class="ex-card"><div class="ex-body">
             <p class="ex-kicker">Simplified illustration · sketch, not real data</p>
             <svg class="minisvg" viewBox="0 0 300 130" role="img" aria-label="king minus man plus woman lands near queen">
@@ -190,7 +228,46 @@
               <circle cx="245" cy="60" r="7" fill="#e9a13b"/><text x="245" y="82" text-anchor="middle" fill="#ece7d8" font-size="11" font-family="ui-monospace,monospace">queen</text>
             </svg>
             <p class="ex-why"><b>Directions mean things.</b> The famous party trick: walk from <i>man</i> toward <i>woman</i> starting at <i>king</i>, and you land near <i>queen</i>. Researchers really do observe this in trained models.</p>
-          </div><p class="ex-count">4 / 4</p></div></div>
+          </div><p class="ex-count">4 / 7</p></div></div>
+          <div class="ex-slide"><div class="ex-card"><div class="ex-body">
+            <p class="ex-kicker">Simplified illustration · sketch, not real data</p>
+            <svg class="minisvg" viewBox="0 0 300 130" role="img" aria-label="paris minus france plus italy lands near rome">
+              <circle cx="50" cy="60" r="6" fill="#62b6a4"/><text x="50" y="82" text-anchor="middle" fill="#ece7d8" font-size="11" font-family="ui-monospace,monospace">paris</text>
+              <text x="86" y="64" text-anchor="middle" fill="#98a0b3" font-size="14" font-family="ui-monospace,monospace">−</text>
+              <circle cx="115" cy="60" r="6" fill="#98a0b3"/><text x="115" y="82" text-anchor="middle" fill="#ece7d8" font-size="11" font-family="ui-monospace,monospace">france</text>
+              <text x="150" y="64" text-anchor="middle" fill="#98a0b3" font-size="14" font-family="ui-monospace,monospace">+</text>
+              <circle cx="180" cy="60" r="6" fill="#98a0b3"/><text x="180" y="82" text-anchor="middle" fill="#ece7d8" font-size="11" font-family="ui-monospace,monospace">italy</text>
+              <text x="208" y="64" text-anchor="middle" fill="#e9a13b" font-size="14" font-family="ui-monospace,monospace">≈</text>
+              <circle cx="245" cy="60" r="7" fill="#e9a13b"/><text x="245" y="82" text-anchor="middle" fill="#ece7d8" font-size="11" font-family="ui-monospace,monospace">rome</text>
+            </svg>
+            <p class="ex-why"><b>Geography has a direction too.</b> Step from <i>france</i> toward <i>italy</i> starting at <i>paris</i>, and you land near <i>rome</i> — the capital–of relationship points the same way every time.</p>
+          </div><p class="ex-count">5 / 7</p></div></div>
+          <div class="ex-slide"><div class="ex-card"><div class="ex-body">
+            <p class="ex-kicker">Simplified illustration · sketch, not real data</p>
+            <svg class="minisvg" viewBox="0 0 300 130" role="img" aria-label="big minus bigger plus small lands near smaller">
+              <circle cx="50" cy="60" r="6" fill="#62b6a4"/><text x="50" y="82" text-anchor="middle" fill="#ece7d8" font-size="11" font-family="ui-monospace,monospace">big</text>
+              <text x="86" y="64" text-anchor="middle" fill="#98a0b3" font-size="14" font-family="ui-monospace,monospace">−</text>
+              <circle cx="115" cy="60" r="6" fill="#98a0b3"/><text x="115" y="82" text-anchor="middle" fill="#ece7d8" font-size="11" font-family="ui-monospace,monospace">bigger</text>
+              <text x="150" y="64" text-anchor="middle" fill="#98a0b3" font-size="14" font-family="ui-monospace,monospace">+</text>
+              <circle cx="180" cy="60" r="6" fill="#98a0b3"/><text x="180" y="82" text-anchor="middle" fill="#ece7d8" font-size="11" font-family="ui-monospace,monospace">small</text>
+              <text x="208" y="64" text-anchor="middle" fill="#e9a13b" font-size="14" font-family="ui-monospace,monospace">≈</text>
+              <circle cx="245" cy="60" r="7" fill="#e9a13b"/><text x="245" y="82" text-anchor="middle" fill="#ece7d8" font-size="11" font-family="ui-monospace,monospace">smaller</text>
+            </svg>
+            <p class="ex-why"><b>Grammar is geometry too.</b> The “one step more” direction that carries <i>big</i> to <i>bigger</i> carries <i>small</i> to <i>smaller</i> — comparatives all point the same way.</p>
+          </div><p class="ex-count">6 / 7</p></div></div>
+          <div class="ex-slide"><div class="ex-card"><div class="ex-body">
+            <p class="ex-kicker">Simplified illustration · sketch, not real data</p>
+            <svg class="minisvg" viewBox="0 0 300 130" role="img" aria-label="cat minus cats plus dogs lands near dog">
+              <circle cx="50" cy="60" r="6" fill="#62b6a4"/><text x="50" y="82" text-anchor="middle" fill="#ece7d8" font-size="11" font-family="ui-monospace,monospace">cat</text>
+              <text x="86" y="64" text-anchor="middle" fill="#98a0b3" font-size="14" font-family="ui-monospace,monospace">−</text>
+              <circle cx="115" cy="60" r="6" fill="#98a0b3"/><text x="115" y="82" text-anchor="middle" fill="#ece7d8" font-size="11" font-family="ui-monospace,monospace">cats</text>
+              <text x="150" y="64" text-anchor="middle" fill="#98a0b3" font-size="14" font-family="ui-monospace,monospace">+</text>
+              <circle cx="180" cy="60" r="6" fill="#98a0b3"/><text x="180" y="82" text-anchor="middle" fill="#ece7d8" font-size="11" font-family="ui-monospace,monospace">dogs</text>
+              <text x="208" y="64" text-anchor="middle" fill="#e9a13b" font-size="14" font-family="ui-monospace,monospace">≈</text>
+              <circle cx="245" cy="60" r="7" fill="#e9a13b"/><text x="245" y="82" text-anchor="middle" fill="#ece7d8" font-size="11" font-family="ui-monospace,monospace">dog</text>
+            </svg>
+            <p class="ex-why"><b>Even plurals line up.</b> The one→many direction from <i>cat</i> to <i>cats</i> also carries <i>dogs</i> back to <i>dog</i> — the plural shift is one consistent arrow.</p>
+          </div><p class="ex-count">7 / 7</p></div></div>
         </div>
       </div>
       <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>

@@ -731,19 +731,44 @@ document.querySelectorAll(".ex-car").forEach(function(car){
       prev=car.querySelector(".ex-prev"),
       next=car.querySelector(".ex-next");
   if(!track||!prev||!next) return;
-  function upd(){
-    var max=track.scrollWidth-track.clientWidth;
-    prev.disabled=track.scrollLeft<=2;
-    next.disabled=track.scrollLeft>=max-2;
+  var slides=Array.prototype.slice.call(track.querySelectorAll(".ex-slide"));
+  var idx=0;
+  /* Exact slide targeting: every navigation lands on a real slide edge,
+     never on a width multiple — so rapid taps can't accumulate drift. */
+  function targetFor(i){
+    var s=slides[i]; if(!s) return 0;
+    var tr=track.getBoundingClientRect(), sr=s.getBoundingClientRect();
+    return track.scrollLeft + (sr.left - tr.left);
   }
-  prev.addEventListener("click",function(){
-    track.scrollBy({left:-track.clientWidth,behavior:"smooth"});
-  });
-  next.addEventListener("click",function(){
-    track.scrollBy({left:track.clientWidth,behavior:"smooth"});
-  });
-  track.addEventListener("scroll",upd,{passive:true});
-  window.addEventListener("resize",upd);
+  function go(i){
+    if(!slides.length) return;
+    idx=Math.max(0,Math.min(slides.length-1,i));
+    track.scrollTo({left:targetFor(idx),behavior:"smooth"});
+    upd();
+  }
+  function upd(){
+    prev.disabled=idx<=0;
+    next.disabled=idx>=slides.length-1;
+  }
+  prev.addEventListener("click",function(){go(idx-1);});
+  next.addEventListener("click",function(){go(idx+1);});
+  /* After a free swipe, re-anchor the index to the nearest slide so the
+     next tap continues from the card you're actually looking at. */
+  var syncT=null;
+  function resync(){
+    if(!slides.length) return;
+    var tr=track.getBoundingClientRect(), best=0, bd=Infinity;
+    slides.forEach(function(s,i){
+      var d=Math.abs(s.getBoundingClientRect().left-tr.left);
+      if(d<bd){bd=d;best=i;}
+    });
+    if(best!==idx){idx=best;upd();}
+  }
+  track.addEventListener("scroll",function(){
+    clearTimeout(syncT); syncT=setTimeout(resync,140);
+  },{passive:true});
+  if("onscrollend" in window) track.addEventListener("scrollend",function(){clearTimeout(syncT);resync();});
+  window.addEventListener("resize",function(){track.scrollTo({left:targetFor(idx)});});
   upd();
 });
 

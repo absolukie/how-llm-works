@@ -79,6 +79,8 @@
     <div class="node-body" id="st-tokenizer-body" hidden>
       <p class="plain">Computers can't read letters — only numbers. So the first thing any language model does is chop your text into pieces called <b>tokens</b>: whole words, word chunks, sometimes single letters. Each piece gets an ID number. From this point on, the model never sees your words — only the numbers.</p>
       <aside class="analogy"><p><span class="who">Analogy</span><b>Think of it like…</b> cutting a sentence into Scrabble tiles. Common letter-groups like <i>un</i> or <i>ing</i> earn their own printed tile; rare words get spelled out letter by letter. Either way, every tile gets a number stamped on the back.</p></aside>
+      <p class="plain">Why chop text at all? Because the model only speaks numbers — and the vocabulary size is a tradeoff. Too few tiles and every sentence becomes a long crawl of letters; too many and the final layer, which scores <i>every</i> tile, gets enormous and slow. Real vocabularies land around 100,000–200,000 tiles: the compromise between short sequences and a manageable output layer.</p>
+      <p class="plain">The standard recipe for learning those tiles is <b>BPE</b> — byte-pair encoding: start from single characters, repeatedly merge the most frequent neighboring pair, stop at the target size. The playground below runs the genuine algorithm, trained live on a toy corpus in your browser.</p>
       <div class="demo">
         <p class="demo-label">Simplified illustration · live toy model</p>
         <h3>Tokenizer playground</h3>
@@ -101,42 +103,13 @@
         </div>
       </div>
       <div class="ex-car">
-        <div class="ex-top"><h4>Five tokenizations, up close</h4>
-          <div class="ex-nav"><button type="button" class="ex-prev" aria-label="Previous example">←</button><button type="button" class="ex-next" aria-label="Next example">→</button></div>
+        <div class="ex-top"><h4>Fifty tokenizations, up close</h4>
+          <div class="ex-nav"><button type="button" class="ex-prev" aria-label="Previous example">&larr;</button><button type="button" class="ex-next" aria-label="Next example">&rarr;</button></div>
         </div>
-        <div class="ex-track" tabindex="0" role="region" aria-label="Tokenizer examples — swipe to browse">
-          <div class="ex-slide"><div class="ex-card"><div class="ex-body">
-            <p class="ex-kicker">Simplified illustration · real toy-model output</p>
-            <p class="ex-input">“unbelievable”</p>
-            <div class="ex-chips"><span class="tok final">un<i>41</i></span><span class="tok final">believable<i>51</i></span></div>
-            <p class="ex-why"><b>Why it split this way:</b> the toy saw <i>un–</i> and <i>believable</i> inside many training words, so they earned their own tiles. Two tokens, done.</p>
-          </div><p class="ex-count">1 / 5</p></div></div>
-          <div class="ex-slide"><div class="ex-card"><div class="ex-body">
-            <p class="ex-kicker">Simplified illustration · real toy-model output</p>
-            <p class="ex-input">“cats”</p>
-            <div class="ex-chips"><span class="tok final">c<i>3</i></span><span class="tok final">a<i>1</i></span><span class="tok final">t<i>20</i></span><span class="tok final">s<i>28</i></span></div>
-            <p class="ex-why"><b>Why it split this way:</b> surprise — with only 75 tiles, the toy never learned a <i>cat</i> chunk. A real tokenizer (100,000 tiles) gives common words their own token.</p>
-          </div><p class="ex-count">2 / 5</p></div></div>
-          <div class="ex-slide"><div class="ex-card"><div class="ex-body">
-            <p class="ex-kicker">Simplified illustration · real toy-model output</p>
-            <p class="ex-input">“running”</p>
-            <div class="ex-chips"><span class="tok final">r<i>18</i></span><span class="tok final">un<i>41</i></span><span class="tok final">n<i>14</i></span><span class="tok final">in<i>58</i></span><span class="tok final">g<i>46</i></span></div>
-            <p class="ex-why"><b>Why it split this way:</b> weird but logical — the tiles <i>un</i> and <i>in</i> were learned from other words and get reused wherever they fit, even mid-word.</p>
-          </div><p class="ex-count">3 / 5</p></div></div>
-          <div class="ex-slide"><div class="ex-card"><div class="ex-body">
-            <p class="ex-kicker">Simplified illustration · real toy-model output</p>
-            <p class="ex-input">“tokenization”</p>
-            <div class="ex-chips"><span class="tok final">to<i>61</i></span><span class="tok final">k<i>11</i></span><span class="tok final">e<i>5</i></span><span class="tok final">n<i>14</i></span><span class="tok final">i<i>9</i></span><span class="tok final">z<i>26</i></span><span class="tok final">a<i>1</i></span><span class="tok final">t<i>20</i></span><span class="tok final">i<i>9</i></span><span class="tok final">o<i>15</i></span><span class="tok final">n<i>30</i></span></div>
-            <p class="ex-why"><b>Why it split this way:</b> a word the toy never met gets spelled out almost letter by letter — 11 tokens. Slow, but it still works: <b>any</b> text can be represented.</p>
-          </div><p class="ex-count">4 / 5</p></div></div>
-          <div class="ex-slide"><div class="ex-card"><div class="ex-body">
-            <p class="ex-kicker">Simplified illustration · real toy-model output</p>
-            <p class="ex-input">“the quick brown fox jumps”</p>
-            <div class="ex-chips"><span class="tok final">5 words<i>→</i></span><span class="tok final">17 tokens<i>total</i></span></div>
-            <p class="ex-why"><b>Why it matters:</b> tokens aren't words. Short common words cost ~1 token each; rare ones cost many. That's the whole pricing game behind “4 characters ≈ 1 token”.</p>
-          </div><p class="ex-count">5 / 5</p></div></div>
-        </div>
+        <div class="ex-track" id="tok-ex-track" tabindex="0" role="region" aria-label="Tokenizer examples &mdash; swipe to browse"></div>
       </div>
+      <p class="plain">Why should you care how text gets chopped? Three ways it bites in real life. The model can&rsquo;t truly see spelling &mdash; &ldquo;the&rdquo; is one tile but &ldquo;teh&rdquo; is three, so a typo looks like a different word entirely. It can&rsquo;t do arithmetic &mdash; numbers arrive as digit confetti, never as values. And other languages pay more &mdash; English gets roughly a tile per word while Chinese often costs a tile per character, making the same meaning longer, slower, and pricier to process.</p>
+      <aside class="takeaway"><p><span class="who">Takeaway</span><b>&ldquo;The model never sees words &mdash; only numbered tiles. &lsquo;Unbelievable&rsquo; is tile 41 + tile 51 to the model, and it has no idea what either &lsquo;means&rsquo; yet.&rdquo;</b></p><p><span class="who">Common misconception</span>Most people think the model reads text like we do &mdash; <b>actually &ldquo;the&rdquo; is a single tile while the typo &ldquo;teh&rdquo; shatters into three, so a one-letter slip looks like a completely different input.</b></p></aside>
       <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
       <div class="deeper" hidden>
         <p>Most tokenizers learn their vocabulary with <b>byte-pair encoding</b>: start from single characters and repeatedly merge the most frequent adjacent pair, until the vocabulary hits its target size — tens of thousands of pieces. Frequent words earn their own token; rare words get spelled out in chunks, so <i>any</i> text can be represented. Rule of thumb: about 4 characters ≈ 1 token in English. The tokenizer is frozen before training and shared by the model forever — which is why a model can never learn a new word's spelling after the fact.</p>
@@ -222,7 +195,8 @@
       <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
       <div class="deeper" hidden>
         <p>The lookup table is the <b>embedding matrix</b> — vocabulary-size × model-width, thousands of numbers per token in real models — and it is <i>learned</i> during training: words appearing in similar contexts get pushed together. Position used to be added as fixed sine waves or learned offsets; modern models bake rotation into the attention step itself (<b>RoPE</b>) — and stretch it to huge contexts with rescaling tricks like <b>YaRN</b>, one way open models reach quarter-million-token windows. The resulting vector joins the <b>residual stream</b>: one vector per token that flows through the entire network, refined at every block.</p>
-      </div>
+      </div>      <aside class="takeaway"><p><span class="who">Takeaway</span><b>&ldquo;Meaning is geometry: words that behave alike live in the same neighborhood of a thousand-dimensional map.&rdquo;</b></p><p><span class="who">Common misconception</span>Most people think each word gets a fixed definition &mdash; <b>actually a word&rsquo;s vector is just a starting address; its meaning gets rewritten by every block that follows. And order isn&rsquo;t built in &mdash; position has to be stamped on.</b></p></aside>
+
     </div>
   </article>
 
@@ -368,7 +342,8 @@
           <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
           <div class="deeper" hidden>
             <p>For input matrix X, each head computes Q=XW<sub>Q</sub>, K=XW<sub>K</sub>, V=XW<sub>V</sub>; scores = QK<sup>T</sup>/√d<sub>k</sub>; a <b>causal mask</b> blanks out future positions — a token may only attend to the left, which is what makes step-by-step generation possible; softmax turns each row of scores into weights; output = weights·V. The pairwise comparison is why attention costs grow with the square of sequence length — the famous O(n²) bottleneck, and the reason frontier labs now compress it: <b>latent attention</b> (MLA) or <b>sparse attention</b> that skips most of the distant past, unlocking million-token contexts.</p>
-          </div>
+          </div>          <aside class="takeaway"><p><span class="who">Takeaway</span><b>&ldquo;Every word re-reads the whole sentence and decides who to listen to before it speaks &mdash; &lsquo;it&rsquo; in &lsquo;the cat licked its paw&rsquo; is mostly listening to &lsquo;cat&rsquo;.&rdquo;</b></p><p><span class="who">Common misconception</span>Most people think the model reads left-to-right like we do &mdash; <b>actually every token compares itself against all previous tokens at once, in parallel. The &lsquo;reading order&rsquo; is an illusion; the comparison is simultaneous.</b></p></aside>
+
         </div>
       </div>
 
@@ -466,7 +441,8 @@
       <div class="deeper" hidden>
         <p>Every block has the same two moves — multi-head self-attention, then the feed-forward net — each in a residual + normalization sandwich. Blocks share a shape but not weights, so early blocks tend to handle surface patterns (word shape, grammar) while later blocks handle abstract ones (logic, long-range references). Nearly all of the model's parameters — and nearly all the compute — live in this stack.</p>
         <p>One more 2024–2026 twist: the biggest models are <b>mixture-of-experts</b>. Each block's feed-forward net is split into dozens or hundreds of specialist sub-networks (“experts”), and a tiny router wakes only a handful per token — plus one shared expert that always runs. Moonshot's open-weight Kimi K2 reports about a trillion total parameters with only ~32B active per token; DeepSeek's V4-Pro reports ~1.6T total with ~49B active. Parameters scale up; the bill per token barely moves.</p>
-      </div>
+      </div>      <aside class="takeaway"><p><span class="who">Takeaway</span><b>&ldquo;Each transformer block is an editorial pass that rewrites every word&rsquo;s sticky note with more context &mdash; &lsquo;bank&rsquo; becomes a different word near &lsquo;river&rsquo; than near &lsquo;money&rsquo;.&rdquo;</b></p><p><span class="who">Common misconception</span>Most people think the model &lsquo;understands&rsquo; a sentence in one go &mdash; <b>actually comprehension is refined gradually: early blocks handle spelling and grammar, later blocks handle logic and long-range references. There is no single moment of understanding.</b></p></aside>
+
     </div>
   </article>
 
@@ -506,7 +482,8 @@
       <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
       <div class="deeper" hidden>
         <p>p<sub>i</sub> = e<sup>z<sub>i</sub></sup> / Σ<sub>j</sub> e<sup>z<sub>j</sub></sup>. Because of the exponential, the top few tokens usually hog nearly all the probability while the long tail shares crumbs. Softmax has no learned parameters — it's pure arithmetic, and it's the same formula used inside the attention step back in stage 3.</p>
-      </div>
+      </div>      <aside class="takeaway"><p><span class="who">Takeaway</span><b>&ldquo;The model doesn&rsquo;t pick a word &mdash; it scores every word it knows, then slices the scores into a pie that always sums to 100%.&rdquo;</b></p><p><span class="who">Common misconception</span>Most people think there&rsquo;s a &lsquo;right answer&rsquo; slot the model fills &mdash; <b>actually it produces a full ranking over 100,000+ words at every step; the &lsquo;answer&rsquo; is just whichever slice the dice lands on.</b></p></aside>
+
     </div>
   </article>
 
@@ -620,7 +597,8 @@
       <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
       <div class="deeper" hidden>
         <p>Temperature T rescales the logits before softmax: p<sub>i</sub> ∝ e<sup>z<sub>i</sub>/T</sup>. As T→0 this approaches argmax — greedy decoding, always the top token; T=1 leaves probabilities untouched; T&gt;1 flattens them. <b>Top-k</b> keeps only the k highest-scoring tokens; <b>top-p</b> (nucleus sampling) keeps the smallest set whose probabilities sum to p. Chatbots typically sample around T≈0.7 with top-p≈0.9: lively, but the truly weird options never get a ticket. Reasoning models add one more knob — <b>thinking effort</b> (low → max in current APIs): how many tokens the model may spend reasoning before it answers. More thinking, better answers, bigger bill — inference-time compute as a dial, not a fixed cost.</p>
-      </div>
+      </div>      <aside class="takeaway"><p><span class="who">Takeaway</span><b>&ldquo;Temperature doesn&rsquo;t make the model smarter or dumber &mdash; it only changes how adventurous the dice roll is.&rdquo;</b></p><p><span class="who">Common misconception</span>Most people think a low temperature is &lsquo;more correct&rsquo; &mdash; <b>actually it just makes the model more repetitive. Correctness comes from training, not temperature; turn it to zero and you get the most likely answer, not the truest one.</b></p></aside>
+
     </div>
   </article>
 
@@ -718,7 +696,8 @@
       <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
       <div class="deeper" hidden>
         <p>Recomputing everything each step would be quadratic; the <b>KV cache</b> avoids it by saving every token's keys and values after its first pass, so each new step only computes the newcomer. The <b>context window</b> is how many tokens the model can juggle at once — a few thousand in early models, a <b>million</b> in current frontier ones, afforded by the compressed-attention tricks from stage 3; past the limit, the oldest tokens fall off. Generation halts on a learned end-of-text token or a length cap. And the loop no longer runs alone: modern systems call <b>tools</b> mid-generation — running code, searching the web, checking a calculator — which multiplies what the raw next-token engine can do without changing its weights.</p>
-      </div>
+      </div>      <aside class="takeaway"><p><span class="who">Takeaway</span><b>&ldquo;The model writes one tile at a time and can never take one back &mdash; every sentence is a one-way trip.&rdquo;</b></p><p><span class="who">Common misconception</span>Most people think the model plans a sentence and then writes it &mdash; <b>actually it plans nothing; each tile is chosen with only the past to lean on. The KV cache is just its notebook, so it doesn&rsquo;t re-read the whole book for every new word.</b></p></aside>
+
     </div>
   </article>
 
@@ -793,7 +772,8 @@
       <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
       <div class="deeper" hidden>
         <p>This is <b>self-supervised learning</b>: the data labels itself, because the next word is always right there in the text — no human annotation needed. The loss is <b>cross-entropy</b> between the predicted and actual next token. Scale is the story: frontier runs now train on <b>tens of trillions</b> of tokens — open labs report 15T+ for Kimi K2, 30T+ for DeepSeek V4 — with up to trillions of parameters, costing tens of millions of dollars in compute — and capabilities nobody explicitly taught tend to <b>emerge</b> past certain scales.</p>
-      </div>
+      </div>      <aside class="takeaway"><p><span class="who">Takeaway</span><b>&ldquo;Nobody taught the model a single fact &mdash; it absorbed grammar, facts, and reasoning as side effects of guessing the next word trillions of times.&rdquo;</b></p><p><span class="who">Common misconception</span>Most people think the model looks up facts in a database &mdash; <b>actually everything it &lsquo;knows&rsquo; is smeared across billions of weights. There is no fact shelf to open.</b></p></aside>
+
     </div>
   </article>
 
@@ -812,7 +792,8 @@
       <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
       <div class="deeper" hidden>
         <p>Usually <b>supervised fine-tuning (SFT)</b> on tens of thousands of high-quality demonstrations. Same next-token objective, new data distribution. It's cheap next to pretraining — hours to days — but it decisively steers behavior. Since 2025 the recipe has partly flipped: labs now grow behaviors with reinforcement learning <i>first</i> (next stage), then use SFT to distill the best of those behaviors back into the model. Most of what you experience as “the assistant's personality” is still set here, not in pretraining.</p>
-      </div>
+      </div>      <aside class="takeaway"><p><span class="who">Takeaway</span><b>&ldquo;Pretraining teaches the model how the world talks; fine-tuning teaches it how to be helpful.&rdquo;</b></p><p><span class="who">Common misconception</span>Most people think fine-tuning adds knowledge &mdash; <b>actually it mostly teaches manners and shape: answer the question, follow the format. The knowledge was already there; fine-tuning just teaches it how to act.</b></p></aside>
+
     </div>
   </article>
 
@@ -831,7 +812,8 @@
       <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
       <div class="deeper" hidden>
         <p>The technique is <b>RLVR</b> — reinforcement learning with <i>verifiable</i> rewards. No human judges, no learned reward model: the reward is “did the code pass its tests?” Variants of the GRPO algorithm update the model toward attempts that beat the average of their group. The usual recipe: a little supervised fine-tuning on long reasoning examples to cold-start the behavior, then large-scale RL, then distilling the best traces back with SFT. The newest models even blend thinking and non-thinking in one set of weights, with reasoning switched on or off per request.</p>
-      </div>
+      </div>      <aside class="takeaway"><p><span class="who">Takeaway</span><b>&ldquo;The model learned to think by getting rewarded for right answers &mdash; nobody ever showed it how to reason.&rdquo;</b></p><p><span class="who">Common misconception</span>Most people think &lsquo;thinking&rsquo; models were taught logic step by step &mdash; <b>actually they discovered working thought patterns through trial and error against checkable answers. The reasoning was never written down by a human.</b></p></aside>
+
     </div>
   </article>
 
@@ -850,7 +832,8 @@
       <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
       <div class="deeper" hidden>
         <p><b>RLHF</b> — reinforcement learning from human feedback (modern variants like DPO skip the RL and optimize preferences directly). The model is nudged, not rewritten, toward preferred outputs, with a penalty for drifting too far from its tuned self (the KL constraint) — which keeps it from gaming the reward model into nonsense. In the 2026 recipe this stage handles <i>preference</i> — style, safety, helpfulness — while raw reasoning ability increasingly comes from the verifiable-reward stage before it. Alignment is steering, not a guarantee: it's why the model <i>usually</i> refuses, not a proof that it always will.</p>
-      </div>
+      </div>      <aside class="takeaway"><p><span class="who">Takeaway</span><b>&ldquo;Taste can&rsquo;t be computed, so humans ranked answers and the model learned what people prefer &mdash; alignment is steering, not a guarantee.&rdquo;</b></p><p><span class="who">Common misconception</span>Most people think RLHF makes the model safe and honest &mdash; <b>actually it teaches the model what humans reward, which is not the same as true. It&rsquo;s why the model <i>usually</i> refuses, not a proof it always will.</b></p></aside>
+
     </div>
   </article>
 
@@ -881,6 +864,8 @@
       </div><p class="ex-count">4 / 4 · RLHF</p></div></div>
     </div>
   </div>
+  <aside class="takeaway"><p><span class="who">Takeaway</span><b>&ldquo;Pretraining teaches the model how the world talks; fine-tuning teaches it how to be helpful; RL teaches it manners and persistence.&rdquo;</b></p><p><span class="who">Common misconception</span>Most people think there&rsquo;s one training event &mdash; <b>actually it&rsquo;s four jobs in sequence: absorb the world, learn the assistant&rsquo;s shape, practice thinking against a scoreboard, then learn human taste. Skip any layer and you get a different creature.</b></p></aside>
+  <aside class="takeaway"><p><span class="who">Takeaway</span><b>&ldquo;An LLM is a next-tile predictor wearing a very convincing understanding costume &mdash; and the costume is the product.&rdquo;</b></p><p><span class="who">Common misconception</span>Most people think fluency means comprehension &mdash; <b>actually the model is fluent because it mastered the statistics of how humans sound, not because it checked anything against reality. Treat it like a brilliant improviser, not a database.</b></p></aside>
 </section>
 </main>
 

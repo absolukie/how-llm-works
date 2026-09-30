@@ -264,6 +264,94 @@ tokInput.addEventListener("input", function(){ clearTimeout(tokT); tokT=setTimeo
 renderTokens();
 
 /* ============================================================
+   TOKENIZER EXAMPLE CAROUSEL · 50 hand-written examples,
+   each broken down by the REAL toy BPE engine at render time
+   ============================================================ */
+var TOK_EX=[
+ {t:"unbelievable", why:"The poster child: the toy met <i>un\u2013</i> and <i>believable</i> inside many training words, so each earned its own tile. Two tokens, done."},
+ {t:"unhappy", why:"<i>un</i> again \u2014 the exact same tile as in \u201cunbelievable\u201d. Negation travels: learn the prefix once, reuse it everywhere."},
+ {t:"untie", why:"And again \u2014 <i>un</i>(41) plus three letters. The prefix tile doesn\u2019t care what word it\u2019s undoing."},
+ {t:"preheat", why:"The <i>re\u2013</i> prefix earned a tile from words like \u201creturn\u201d and \u201credo\u201d. Prefixes are some of the hardest-working tiles in the box."},
+ {t:"replay", why:"<i>re</i>(55) plus <i>la</i>(73) \u2014 two earned tiles in one word. Frequent chunks stack like Lego."},
+ {t:"quickly", why:"The <i>\u2013ly</i> ending earned its own tile. Adverb endings are so common they get printed, just like prefixes."},
+ {t:"slowly", why:"<i>ly</i>(63) again \u2014 same tile, different word. Suffixes travel exactly like prefixes do."},
+ {t:"darkness", why:"Seven tiles \u2014 and no <i>ness</i> tile. Some endings earn tiles (<i>ly</i>), some never do. The vocabulary is a popularity contest, not a grammar book."},
+ {t:"happiness", why:"Eight tiles \u2014 and look, <i>in</i> snuck in mid-word. Tiles are dumb patterns; they don\u2019t know they\u2019re inside \u201chappiness\u201d."},
+ {t:"the", why:"The commonest word in English gets a single tile. Frequency is the whole game: the more a chunk appears, the more likely it owns a tile."},
+ {t:"the the the", why:"Repetition is cheap \u2014 the same tile three times. Common words cost almost nothing; rare ones cost many tiles."},
+ {t:"a", why:"One letter, one tile. The cheapest possible token."},
+ {t:"cats", why:"Surprise \u2014 with only 75 tiles, the toy never learned a <i>cat</i> chunk. A real tokenizer (100,000+ tiles) gives common words their own token; tiny vocabularies spell everything out."},
+ {t:"dogs", why:"Plurals usually cost one extra tile: the stem plus an <i>s</i>. (\u201cdog\u201d alone \u2192 <i>do</i> + <i>g</i> \u2014 same stem, no plural tile.)"},
+ {t:"teh", why:"\u201cthe\u201d is one tile; the typo \u201cteh\u201d shatters into three. To the model these look nothing alike \u2014 which is why typos confuse it more than they confuse you."},
+ {t:"fjdjbdjajs", why:"Ten tiles of alphabet soup. Gibberish gets no discounts \u2014 every letter pays full price."},
+ {t:"don't", why:"The toy drops the apostrophe and reads \u201cdont\u201d. Real tokenizers keep the pieces \u2014 \u201cdon\u201d + \u201c\u2019\u201d + \u201ct\u201d. Contractions almost always split."},
+ {t:"e-mail", why:"Identical to \u201cemail\u201d \u2014 the toy can\u2019t tell them apart. A real tokenizer can, splitting \u201ce\u201d + \u201c-\u201d + \u201cmail\u201d."},
+ {t:"well-known", why:"The hyphen vanishes \u2014 \u201cwell-known\u201d and \u201cwellknown\u201d are identical to the toy. Real tokenizers split it: \u201cwell\u201d + \u201c-\u201d + \u201cknown\u201d."},
+ {t:"mother-in-law", why:"Three hyphens gone without a trace. Punctuation the toy never learned simply doesn\u2019t exist to it."},
+ {t:"Hello", why:"Byte-for-byte identical to \u201chello\u201d \u2014 the toy lowercases everything first. Real tokenizers don\u2019t: \u201cHello\u201d and \u201chello\u201d are different tiles."},
+ {t:"HELLO", why:"Shouting changes nothing for the toy. In real tokenizers ALL-CAPS often shatters into pieces \u2014 caps are rare in training text, so they never earned tiles."},
+ {t:"camelCase", why:"The capital C carried the word boundary \u2014 and the toy erased it. Real tokenizers split at the hump: \u201ccamel\u201d + \u201cCase\u201d."},
+ {t:"snake_case", why:"Underscore gone too. Real tokenizers keep it: \u201csnake\u201d + \u201c_\u201d + \u201ccase\u201d \u2014 code is full of these joints."},
+ {t:"function", why:"\u201cun\u201d \u2014 inside \u201cfunction\u201d! The tile learned from \u201cunbelievable\u201d moonlights wherever \u201cu\u201d,\u201cn\u201d sit together. Tiles have no idea what words are."},
+ {t:"running", why:"Weird but logical: the tiles <i>un</i> and <i>in</i> were learned from other words and get reused mid-word, even here."},
+ {t:"tokenization", why:"A word the toy never met gets spelled out almost letter by letter \u2014 11 tokens. Slow, but it works: <b>any</b> text can be represented."},
+ {t:"antidisestablishmentarianism", why:"Twenty-five tiles. Long rare words shatter \u2014 each piece is common, the combination is not."},
+ {t:"pneumonoultramicroscopicsilicovolcanoconiosis", why:"Forty-one tiles for one word \u2014 the longest word in major dictionaries, and the toy sounds it out like a child reading aloud."},
+ {t:"supercalifragilisticexpialidocious", why:"Twenty-nine tiles. Even beloved nonsense shatters \u2014 what matters is frequency in training text, not fame."},
+ {t:"subdermatoglyphic", why:"Fifteen tiles \u2014 and a party fact: it\u2019s the longest English word with no repeated letters. The tiles don\u2019t care."},
+ {t:"starfish", why:"A compound \u2014 but the toy cuts \u201cs-t-ar-fi-sh\u201d, not \u201cstar-fish\u201d. Tiles follow frequency, not meaning."},
+ {t:"rainbow", why:"\u201crainbow\u201d = \u201cr\u201d + \u201ca\u201d + \u201cin\u201d + \u201cb\u201d + \u201cow\u201d. Absurd and correct: those chunks were simply more common than \u201crain\u201d and \u201cbow\u201d."},
+ {t:"bookkeeper", why:"Nine tiles, and \u201coo\u201d earned one \u2014 double letters are common enough to get printed. (Three e\u2019s, two k\u2019s: English.)"},
+ {t:"strengths", why:"Seven tiles for nine letters \u2014 consonant clusters barely merge. The hardest English word to pronounce is also hard to tile."},
+ {t:"rhythms", why:"No vowels, no problem. The tokenizer doesn\u2019t need vowels \u2014 it needs frequent neighbors."},
+ {t:"queueing", why:"The famous vowel pileup: u-e-u-e in a row, and the toy just walks through them."},
+ {t:"$100", why:"The toy sees NOTHING \u2014 digits aren\u2019t in its alphabet. Real tokenizers split numbers digit by digit: \u201c100\u201d \u2192 \u201c1\u201d,\u201c0\u201d,\u201c0\u201d. The model never sees a number, only digit confetti \u2014 one reason arithmetic is shaky."},
+ {t:"2024", why:"Invisible to the toy. Real tokenizers chop years into pairs or digits \u2014 \u201c2024\u201d \u2192 \u201c20\u201d,\u201c24\u201d. A year is never one thing to the model."},
+ {t:"3.14159", why:"Dropped entirely here. Real tokenizers turn decimals into digit soup: \u201c3\u201d,\u201c.\u201d,\u201c14\u201d,\u201c15\u201d,\u201c9\u201d. Pi arrives as confetti, never as a number."},
+ {t:"caf\u00e9", why:"The toy silently EATS the \u00e9 \u2014 \u201ccaf\u00e9\u201d becomes \u201ccaf\u201d. Real tokenizers split accents into extra byte-tiles: accented text costs more, everywhere."},
+ {t:"na\u00efve", why:"The \u00ef vanished and now it reads \u201cnave\u201d \u2014 a different word! Dropped characters can silently corrupt meaning."},
+ {t:"user@example.com", why:"The @ and . are erased \u2014 an email becomes one long word. Real tokenizers split it: \u201cuser\u201d + \u201c@\u201d + \u201cexample\u201d + \u201c.\u201d + \u201ccom\u201d."},
+ {t:"https://example.com", why:"\u201c://\u201d gone \u2014 to the toy it\u2019s one word. Real tokenizers keep the protocol pieces: \u201chttps\u201d + \u201c://\u201d."},
+ {t:"\u{1f600}", why:"Invisible \u2014 emoji aren\u2019t in the toy\u2019s alphabet. Real tokenizers give common emoji one or two tiles each; rare ones shatter into bytes."},
+ {t:"\u4e2d\u6587", why:"Two characters, zero tiles \u2014 the whole script is outside the toy\u2019s world. Real tokenizers spend roughly a tile per Chinese character: the same meaning costs more tiles than English."},
+ {t:"New York", why:"Seven tiles here \u2014 but real tokenizers merge frequent phrases, and multi-word chunks like \u201cNew York\u201d routinely become a single tile. Phrases you say a lot become vocabulary."},
+ {t:"machine learning", why:"Eleven tiles in the toy \u2014 yet in real tokenizers \u201cmachine learning\u201d is frequently one tile. The vocabulary bends toward what people actually write."},
+ {t:"the quick brown fox jumps", why:"Five words, seventeen tokens. Tokens aren\u2019t words \u2014 and \u201c4 characters \u2248 1 token\u201d is the whole pricing game behind API bills."},
+ {t:"    x = 1", why:"The toy throws away the spaces and reads just \u201cx\u201d. Real tokenizers do the opposite: a four-space indent is often a SINGLE tile \u2014 Python pays a token tax on every indent level."},
+];
+(function(){
+  var track=document.getElementById("tok-ex-track");
+  if(!track) return;
+  var html="";
+  TOK_EX.forEach(function(ex,i){
+    var words=normalizeInput(ex.t), chips="";
+    words.forEach(function(w){
+      bpeEncodeWord(w,bpeModel.ranks).forEach(function(sym){
+        if(sym==="</w>")return;
+        chips+='<span class="tok final">'+esc(sym.replace("</w>",""))+'<i>'+bpeModel.vocab.get(sym)+'</i></span>';
+      });
+    });
+    if(!chips) chips='<span class="tok-empty">\u2205 \u2014 nothing survived: no a\u2013z letters</span>';
+    var rawFlat=ex.t.replace(/\s+/g," ").trim();
+    var disp=esc(ex.t).replace(/^ +/gm,function(m){ return new Array(m.length+1).join("&nbsp;"); });
+    var norm=words.join(" "), normLine="";
+    if(norm!==rawFlat){
+      normLine = norm===""
+        ? '<p class="ex-norm">toy reads: (nothing \u2014 every character was dropped)</p>'
+        : '<p class="ex-norm">toy reads: &ldquo;'+esc(norm)+'&rdquo;</p>';
+    }
+    html+='<div class="ex-slide"><div class="ex-card"><div class="ex-body">'
+      +'<p class="ex-kicker">Simplified illustration \u00b7 real toy-model output</p>'
+      +'<p class="ex-input">&ldquo;'+disp+'&rdquo;</p>'
+      +normLine
+      +'<div class="ex-chips">'+chips+'</div>'
+      +'<p class="ex-why">'+ex.why+'</p>'
+      +'</div><p class="ex-count">'+(i+1)+' / '+TOK_EX.length+'</p></div></div>';
+  });
+  track.innerHTML=html;
+})();
+
+/* ============================================================
    DEMO 2 · real scaled dot-product attention, toy embeddings
    ============================================================ */
 function mulberry32(a){

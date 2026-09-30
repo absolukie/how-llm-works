@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>How an LLM Works — an interactive blueprint</title>
+<meta name="description" content="A tappable, interactive diagram explaining how a large language model works — tokenization, embeddings, attention, sampling — with live toy-scale demos. Runs entirely in your browser.">
+<meta name="theme-color" content="#0b101c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="How LLMs Work">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="hero">
+  <p class="kicker">An interactive blueprint · tap any stage</p>
+  <h1>How a large<br>language model works</h1>
+  <p class="lede">A language model is prediction machinery: turn words into numbers, mix them through dozens of identical blocks, and roll weighted dice for the next word — one token at a time.</p>
+  <p class="flow-note" aria-hidden="true"><span class="flow-arrow">↓</span> data flows down</p>
+</header>
+
+<main>
+<section class="pipeline" aria-label="The LLM pipeline, top to bottom">
+
+  <!-- 1 · TOKENIZER -->
+  <article class="node" id="st-tokenizer">
+    <button class="node-head" aria-expanded="false" aria-controls="st-tokenizer-body">
+      <span class="num" aria-hidden="true">1</span>
+      <span class="head-text">
+        <span class="stage-name">Tokenizer</span>
+        <span class="teaser">Text in, numbers out.</span>
+      </span>
+      <span class="chev" aria-hidden="true"></span>
+    </button>
+    <div class="node-body" id="st-tokenizer-body" hidden>
+      <p class="plain">A model can't read letters — it only crunches numbers. The tokenizer slices your text into pieces called <b>tokens</b> (whole words, word chunks, or punctuation) and swaps each for an ID number. <i>Unbelievable</i> might become two tokens: <i>un</i> + <i>believable</i>. From here on, everything the model does happens on those numbers.</p>
+      <div class="demo">
+        <p class="demo-label">Simplified illustration · live toy model</p>
+        <h3>Tokenizer playground</h3>
+        <p class="demo-note">A genuine byte-pair encoding (BPE), trained right here in your browser on 31 tiny sentences — a toy vocabulary of 71 pieces. GPT's real tokenizer learns the same way, at vastly larger scale.</p>
+        <label class="field">
+          <span>Type something <em>(toy vocab: a–z and spaces only)</em></span>
+          <input id="tok-input" type="text" value="the cat sat on the mat" maxlength="120" autocomplete="off" autocapitalize="off" spellcheck="false">
+        </label>
+        <div class="tok-out" id="tok-out" aria-live="polite"></div>
+        <p class="tok-stats" id="tok-stats"></p>
+      </div>
+      <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
+      <div class="deeper" hidden>
+        <p>Most tokenizers learn their vocabulary with <b>byte-pair encoding</b>: start from single characters and repeatedly merge the most frequent adjacent pair, until the vocabulary hits its target size — tens of thousands of pieces. Frequent words earn their own token; rare words get spelled out in chunks, so <i>any</i> text can be represented. Rule of thumb: about 4 characters ≈ 3 tokens in English. The tokenizer is frozen before training and shared by the model forever — which is why a model can never learn a new word's spelling after the fact.</p>
+      </div>
+    </div>
+  </article>
+
+  <!-- 2 · EMBEDDINGS -->
+  <article class="node" id="st-embed">
+    <button class="node-head" aria-expanded="false" aria-controls="st-embed-body">
+      <span class="num" aria-hidden="true">2</span>
+      <span class="head-text">
+        <span class="stage-name">Embeddings <span class="amp">+</span> position</span>
+        <span class="teaser">IDs become meaning-vectors; order gets stamped in.</span>
+      </span>
+      <span class="chev" aria-hidden="true"></span>
+    </button>
+    <div class="node-body" id="st-embed-body" hidden>
+      <p class="plain">Each token ID is looked up in a huge table that converts it into a long list of numbers — a <b>vector</b> — capturing something about the word's meaning. <i>King</i> lands near <i>queen</i> and far from <i>carburetor</i>. Then position information is folded in, because <i>dog bites man</i> and <i>man bites dog</i> use identical tokens in a different order.</p>
+      <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
+      <div class="deeper" hidden>
+        <p>The lookup table is the <b>embedding matrix</b> — vocabulary-size × model-width, thousands of numbers per token in real models — and it is <i>learned</i> during training: words appearing in similar contexts get pushed together. Position used to be added as fixed sine waves or learned offsets; modern models bake rotation into the attention step itself (<b>RoPE</b>). The resulting vector joins the <b>residual stream</b>: one vector per token that flows through the entire network, refined at every block.</p>
+      </div>
+    </div>
+  </article>
+
+  <!-- 3 · TRANSFORMER BLOCKS -->
+  <article class="node" id="st-blocks">
+    <button class="node-head" aria-expanded="false" aria-controls="st-blocks-body">
+      <span class="num" aria-hidden="true">3</span>
+      <span class="head-text">
+        <span class="stage-name">Transformer blocks <span class="times">×N</span></span>
+        <span class="teaser">The engine room — repeated dozens of times.</span>
+      </span>
+      <span class="chev" aria-hidden="true"></span>
+    </button>
+    <div class="node-body" id="st-blocks-body" hidden>
+      <p class="plain">This is where the thinking happens. Your tokens' vectors march through a tall stack of identical <b>transformer blocks</b> — 96 of them in GPT-3, for example. Each block lets tokens exchange information, then polishes each vector with a small neural net. By the final block, every vector encodes its word <i>in full context</i>. Open each part:</p>
+
+      <div class="subnode">
+        <button class="sub-head" aria-expanded="false" aria-controls="sub-attn-body">
+          <span class="sub-name">Self-attention <span class="mono-tag">Q · K · V</span></span>
+          <span class="chev sm" aria-hidden="true"></span>
+        </button>
+        <div class="sub-body" id="sub-attn-body" hidden>
+          <p class="plain">Each token broadcasts three things: a <b>query</b> (“what am I looking for?”), a <b>key</b> (“what do I contain?”), and a <b>value</b> (“what do I share if picked?”). Queries and keys are compared pairwise — strong match, strong connection. In <i>the cat sat because it was tired</i>, the query from <i>it</i> matches the key of <i>cat</i>, so <i>it</i>'s vector absorbs a big dose of cat-ness. Try it live below.</p>
+          <div class="demo">
+            <p class="demo-label">Simplified illustration · real math, toy data</p>
+            <h3>Attention heatmap</h3>
+            <p class="demo-note">Genuine scaled dot-product attention, computed live — but on random 8-number toy embeddings. A real model <em>learns</em> these numbers; here they're dice rolls, so shuffle them and watch the pattern change. Rows ask, columns answer: how much does each word attend to each other word?</p>
+            <div class="seg" role="group" aria-label="Example sentence" id="attn-sentences">
+              <button type="button" data-s="0" class="on">cat / mat</button>
+              <button type="button" data-s="1">dog / ball</button>
+              <button type="button" data-s="2">umbrella</button>
+            </div>
+            <div class="heat-wrap"><div class="heat" id="attn-heat" role="img" aria-label="Attention weight heatmap"></div></div>
+            <p class="heat-read" id="attn-read" aria-live="polite">Tap any cell to read its weight.</p>
+            <button type="button" class="btn" id="attn-shuffle">Shuffle embeddings</button>
+          </div>
+          <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
+          <div class="deeper" hidden>
+            <p>For input matrix X, each head computes Q=XW<sub>Q</sub>, K=XW<sub>K</sub>, V=XW<sub>V</sub>; scores = QK<sup>T</sup>/√d<sub>k</sub>; a <b>causal mask</b> blanks out future positions — a token may only attend to the left, which is what makes step-by-step generation possible; softmax turns each row of scores into weights; output = weights·V. The pairwise comparison is why attention costs grow with the square of sequence length — the famous O(n²) bottleneck.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="subnode">
+        <button class="sub-head" aria-expanded="false" aria-controls="sub-mh-body">
+          <span class="sub-name">Multi-head attention</span>
+          <span class="chev sm" aria-hidden="true"></span>
+        </button>
+        <div class="sub-body" id="sub-mh-body" hidden>
+          <p class="plain">One attention pattern isn't enough, so each block runs many <b>in parallel</b> — called heads. One head might link pronouns to nouns, another might track verb tense, a third might watch punctuation. Their outputs are glued back together into a single vector.</p>
+          <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
+          <div class="deeper" hidden>
+            <p>Each head gets its own W<sub>Q</sub>, W<sub>K</sub>, W<sub>V</sub>, projecting to a smaller width d<sub>k</sub> = d<sub>model</sub>/h (GPT-3: 96 heads × 128 dims each). All heads run simultaneously on the same input; their results are concatenated and re-projected with W<sub>O</sub>. Heads genuinely specialize during training — researchers have found heads that do nothing but resolve pronouns or match opening brackets to closing ones.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="subnode">
+        <button class="sub-head" aria-expanded="false" aria-controls="sub-ffn-body">
+          <span class="sub-name">Feed-forward network</span>
+          <span class="chev sm" aria-hidden="true"></span>
+        </button>
+        <div class="sub-body" id="sub-ffn-body" hidden>
+          <p class="plain">Attention mixes information <i>between</i> tokens; the feed-forward network works on each token <i>alone</i>. It's a tiny two-layer neural net applied to every position identically — and it's where most of the model's factual “knowledge” lives, as millions of learned associations.</p>
+          <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
+          <div class="deeper" hidden>
+            <p>FFN(x) = W<sub>2</sub>·GELU(W<sub>1</sub>x): the vector is expanded to about 4× width, passed through a nonlinearity, and squeezed back down. Roughly two-thirds of a transformer's parameters sit in these layers. A useful mental image: the first matrix detects patterns (“this looks like a capital-city context”), the second writes the conclusion back into the vector.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="subnode">
+        <button class="sub-head" aria-expanded="false" aria-controls="sub-nr-body">
+          <span class="sub-name">Layer norm <span class="amp">+</span> residuals</span>
+          <span class="chev sm" aria-hidden="true"></span>
+        </button>
+        <div class="sub-body" id="sub-nr-body" hidden>
+          <p class="plain">Each sub-step is wrapped in two safety rails. The <b>residual connection</b> adds the input back to the output — information can never be destroyed, only refined. <b>Layer normalization</b> rescales the numbers to keep them well-behaved across a hundred layers.</p>
+          <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
+          <div class="deeper" hidden>
+            <p>Modern blocks use <b>pre-norm</b>: x + Sublayer(LayerNorm(x)). Residuals give gradients a clean highway back through all N blocks — that's what makes training 100-layer networks possible at all; without them the signal would vanish or explode. Normalization keeps every activation in a range the next layer expects, stabilizing the whole stack.</p>
+          </div>
+        </div>
+      </div>
+
+      <button class="deeper-toggle" aria-expanded="false"><span>Go deeper on the stack</span><span class="chev sm" aria-hidden="true"></span></button>
+      <div class="deeper" hidden>
+        <p>Every block has the same two moves — multi-head self-attention, then the feed-forward net — each in a residual + normalization sandwich. Blocks share a shape but not weights, so early blocks tend to handle surface patterns (word shape, grammar) while later blocks handle abstract ones (logic, long-range references). Nearly all of the model's parameters — and nearly all the compute — live in this stack.</p>
+      </div>
+    </div>
+  </article>
+
+  <!-- 4 · OUTPUT HEAD -->
+  <article class="node" id="st-head">
+    <button class="node-head" aria-expanded="false" aria-controls="st-head-body">
+      <span class="num" aria-hidden="true">4</span>
+      <span class="head-text">
+        <span class="stage-name">Output head <span class="mono-tag">unembedding</span></span>
+        <span class="teaser">Vectors become scores over every word.</span>
+      </span>
+      <span class="chev" aria-hidden="true"></span>
+    </button>
+    <div class="node-body" id="st-head-body" hidden>
+      <p class="plain">After the last block, we take the vector sitting at the <b>final</b> token position — the one that has absorbed the entire context — and project it back onto the full vocabulary. Every token the model knows gets a raw score, a <b>logit</b>: how strongly it's favored as the next token.</p>
+      <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
+      <div class="deeper" hidden>
+        <p>This is the <b>unembedding</b>: a d<sub>model</sub> × vocabulary matrix — sometimes literally the same weights as the input embedding, tied. One matrix multiply turns one vector into ~100k scores. During training this happens at <i>every</i> position at once (each position predicts the token after it); during generation, only the last position matters.</p>
+      </div>
+    </div>
+  </article>
+
+  <!-- 5 · SOFTMAX -->
+  <article class="node" id="st-softmax">
+    <button class="node-head" aria-expanded="false" aria-controls="st-softmax-body">
+      <span class="num" aria-hidden="true">5</span>
+      <span class="head-text">
+        <span class="stage-name">Softmax</span>
+        <span class="teaser">Raw scores become honest probabilities.</span>
+      </span>
+      <span class="chev" aria-hidden="true"></span>
+    </button>
+    <div class="node-body" id="st-softmax-body" hidden>
+      <p class="plain">Logits are just scores — negatives allowed, no total. <b>Softmax</b> converts them into proper probabilities that sum to 100%. The exponential inside it exaggerates differences: a token scoring a little higher can end up <i>a lot</i> more likely. What you get is the model's genuine uncertainty about what comes next.</p>
+      <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
+      <div class="deeper" hidden>
+        <p>p<sub>i</sub> = e<sup>z<sub>i</sub></sup> / Σ<sub>j</sub> e<sup>z<sub>j</sub></sup>. Because of the exponential, the top few tokens usually hog nearly all the probability while the long tail shares crumbs. Softmax has no learned parameters — it's pure arithmetic, and it's the same formula used inside the attention step back in stage 3.</p>
+      </div>
+    </div>
+  </article>
+
+  <!-- 6 · SAMPLING -->
+  <article class="node" id="st-sample">
+    <button class="node-head" aria-expanded="false" aria-controls="st-sample-body">
+      <span class="num" aria-hidden="true">6</span>
+      <span class="head-text">
+        <span class="stage-name">Sampling</span>
+        <span class="teaser">Rolling weighted dice — where creativity comes from.</span>
+      </span>
+      <span class="chev" aria-hidden="true"></span>
+    </button>
+    <div class="node-body" id="st-sample-body" hidden>
+      <p class="plain">The model doesn't have to take the top token. <b>Sampling</b> rolls weighted dice over the probabilities instead. <b>Temperature</b> is the knob: low temperature makes the favorite nearly certain (focused, repetitive); high temperature spreads the love (creative, unhinged). <b>Top-k</b> and <b>top-p</b> first cross the strangest options off the list. Same prompt, different rolls, different answers.</p>
+      <div class="demo">
+        <p class="demo-label">Simplified illustration · real math, toy data</p>
+        <h3>Sampling lab</h3>
+        <p class="demo-note">Eight candidate next-words with fixed scores. Real softmax, real dice. Drag the temperature down and watch the favorite go inevitable; crank it up and watch chaos.</p>
+        <label class="slider">
+          <span>Temperature <b id="tmp-val">1.00</b></span>
+          <input id="samp-temp" type="range" min="0.1" max="2" step="0.05" value="1" aria-label="Temperature">
+        </label>
+        <label class="slider">
+          <span>Top-k <b id="topk-val">8</b></span>
+          <input id="samp-topk" type="range" min="1" max="8" step="1" value="8" aria-label="Top-k">
+        </label>
+        <div class="bars" id="samp-bars"></div>
+        <div class="samp-row">
+          <button type="button" class="btn" id="samp-once">Sample once</button>
+          <button type="button" class="btn ghost" id="samp-20">Sample 20×</button>
+          <button type="button" class="btn ghost" id="samp-clear">Clear</button>
+        </div>
+        <p class="samp-pick" id="samp-pick" aria-live="polite">Press “Sample once”.</p>
+        <div class="samp-seq" id="samp-seq" aria-live="polite" aria-label="Sampled tokens"></div>
+      </div>
+      <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
+      <div class="deeper" hidden>
+        <p>Temperature T rescales the logits before softmax: p<sub>i</sub> ∝ e<sup>z<sub>i</sub>/T</sup>. As T→0 this approaches argmax — greedy decoding, always the top token; T=1 leaves probabilities untouched; T&gt;1 flattens them. <b>Top-k</b> keeps only the k highest-scoring tokens; <b>top-p</b> (nucleus sampling) keeps the smallest set whose probabilities sum to p. Chatbots typically sample around T≈0.7 with top-p≈0.9: lively, but the truly weird options never get a ticket.</p>
+      </div>
+    </div>
+  </article>
+
+  <!-- 7 · AUTOREGRESSIVE LOOP -->
+  <article class="node" id="st-loop">
+    <button class="node-head" aria-expanded="false" aria-controls="st-loop-body">
+      <span class="num" aria-hidden="true">7</span>
+      <span class="head-text">
+        <span class="stage-name">The autoregressive loop</span>
+        <span class="teaser">One token at a time, feeding itself.</span>
+      </span>
+      <span class="chev" aria-hidden="true"></span>
+    </button>
+    <div class="node-body" id="st-loop-body" hidden>
+      <p class="plain">The sampled token is glued onto the end of the input, and the <i>whole pipeline runs again</i> — and again, until a special stop token appears. The model never “writes a paragraph”; it predicts one next token, hundreds of times. This loop is called <b>autoregressive</b> generation.</p>
+      <div class="loop-sketch" aria-hidden="true">
+        <span class="lp">prompt</span><span class="la">→</span><span class="lp">token</span><span class="la">→</span><span class="lp">prompt+token</span><span class="la">→</span><span class="lp">token</span><span class="la">→</span><span class="lp dim">…</span>
+      </div>
+      <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
+      <div class="deeper" hidden>
+        <p>Recomputing everything each step would be quadratic; the <b>KV cache</b> avoids it by saving every token's keys and values after its first pass, so each new step only computes the newcomer. The <b>context window</b> is how many tokens the model can juggle at once — a few thousand in early models, hundreds of thousands in modern ones; past the limit, the oldest tokens fall off. Generation halts on a learned end-of-text token or a length cap.</p>
+      </div>
+    </div>
+  </article>
+
+</section>
+
+<!-- HOW IT LEARNED -->
+<section class="learned" aria-label="How the model learned">
+  <p class="kicker">Separate track</p>
+  <h2>How it learned</h2>
+  <p class="lede-sm">Nothing above was programmed. Every matrix in this diagram started as random noise. Training shaped them — in three phases.</p>
+
+  <article class="node" id="st-pretrain">
+    <button class="node-head" aria-expanded="false" aria-controls="st-pretrain-body">
+      <span class="num alt" aria-hidden="true">A</span>
+      <span class="head-text">
+        <span class="stage-name">Pretraining</span>
+        <span class="teaser">Predict the next word, trillions of times.</span>
+      </span>
+      <span class="chev" aria-hidden="true"></span>
+    </button>
+    <div class="node-body" id="st-pretrain-body" hidden>
+      <p class="plain">The model reads an enormous slice of the internet — books, articles, code, forums — with a single job: <b>predict the next word</b>, over and over. Every wrong guess nudges its billions of numbers a hair in the right direction. Grammar, facts, even reasoning patterns emerge as side effects of getting really, really good at next-word prediction.</p>
+      <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
+      <div class="deeper" hidden>
+        <p>This is <b>self-supervised learning</b>: the data labels itself, because the next word is always right there in the text — no human annotation needed. The loss is <b>cross-entropy</b> between the predicted and actual next token. Scale is the story: frontier runs train on trillions of tokens with hundreds of billions of parameters, costing tens of millions of dollars in compute — and capabilities nobody explicitly taught tend to <b>emerge</b> past certain scales.</p>
+      </div>
+    </div>
+  </article>
+
+  <article class="node" id="st-finetune">
+    <button class="node-head" aria-expanded="false" aria-controls="st-finetune-body">
+      <span class="num alt" aria-hidden="true">B</span>
+      <span class="head-text">
+        <span class="stage-name">Fine-tuning</span>
+        <span class="teaser">From mimic to assistant.</span>
+      </span>
+      <span class="chev" aria-hidden="true"></span>
+    </button>
+    <div class="node-body" id="st-finetune-body" hidden>
+      <p class="plain">A pretrained model is a brilliant mimic with no manners — ask it a question and it might just continue it with five more questions. <b>Fine-tuning</b> trains it further on curated examples: instructions paired with good responses. It learns the <i>shape</i> of being helpful — answer the question, follow the format, hold the tone.</p>
+      <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
+      <div class="deeper" hidden>
+        <p>Usually <b>supervised fine-tuning (SFT)</b> on tens of thousands of high-quality demonstrations. Same next-token objective, new data distribution. It's cheap next to pretraining — hours to days — but it decisively steers behavior. Most of what you experience as “the assistant's personality” is set here, not in pretraining.</p>
+      </div>
+    </div>
+  </article>
+
+  <article class="node" id="st-rlhf">
+    <button class="node-head" aria-expanded="false" aria-controls="st-rlhf-body">
+      <span class="num alt" aria-hidden="true">C</span>
+      <span class="head-text">
+        <span class="stage-name">RLHF <span class="amp">/</span> alignment</span>
+        <span class="teaser">Steered toward what humans prefer.</span>
+      </span>
+      <span class="chev" aria-hidden="true"></span>
+    </button>
+    <div class="node-body" id="st-rlhf-body" hidden>
+      <p class="plain">Finally, humans rank several candidate answers from best to worst. A separate <b>reward model</b> learns to predict those human preferences, and the language model is tuned to score highly on it. This is the layer that teaches it to refuse harmful requests, admit uncertainty, and generally act aligned with what people want.</p>
+      <button class="deeper-toggle" aria-expanded="false"><span>Go deeper</span><span class="chev sm" aria-hidden="true"></span></button>
+      <div class="deeper" hidden>
+        <p><b>RLHF</b> — reinforcement learning from human feedback (modern variants like DPO skip the RL and optimize preferences directly). The model is nudged, not rewritten, toward preferred outputs, with a penalty for drifting too far from its fine-tuned self (the KL constraint) — which keeps it from gaming the reward model into nonsense. Alignment is steering, not a guarantee: it's why the model <i>usually</i> refuses, not a proof that it always will.</p>
+      </div>
+    </div>
+  </article>
+</section>
+</main>
+
+<footer>
+  <p class="fine">The three playgrounds are <b>simplified illustrations</b> — real algorithms running on toy-scale data, entirely in your browser. No servers, no tracking, no data leaves your device. The math is the same math the big models use; only the scale differs.</p>
+  <p class="fine dim">A handmade explainer · set in system type · drawn with CSS</p>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -139,9 +139,9 @@ var tokInput=document.getElementById("tok-input"),
     mergeWordEl=document.getElementById("merge-word"),
     mergePlayBtn=document.getElementById("merge-play");
 if(tokNote){
-  tokNote.innerHTML="A genuine byte-pair encoding (BPE), trained right here in your browser on <b>"+
+  tokNote.innerHTML="A genuine BPE tokenizer — \u201cbyte-pair encoding\u201d, the standard trick tokenizers use to learn their pieces — trained live in your browser on <b>"+
     BPE_CORPUS.length+" tiny sentences</b> — a toy vocabulary of <b>"+bpeModel.vocab.size+
-    " pieces</b>. GPT's real tokenizer learns the same way, at vastly larger scale.";
+    " pieces</b>. GPT's real one learns exactly this way, at vastly larger scale.";
 }
 
 function normalizeInput(text){
@@ -634,5 +634,89 @@ document.getElementById("samp-clear").addEventListener("click", function(){
   seq.innerHTML=""; pick.textContent="Press “Sample once”.";
 });
 renderLab();
+
+/* ============================================================
+   EXAMPLE CAROUSELS · hand-rolled, one initializer for all
+   ============================================================ */
+document.querySelectorAll(".ex-car").forEach(function(car){
+  var track=car.querySelector(".ex-track"),
+      prev=car.querySelector(".ex-prev"),
+      next=car.querySelector(".ex-next");
+  if(!track||!prev||!next) return;
+  function upd(){
+    var max=track.scrollWidth-track.clientWidth;
+    prev.disabled=track.scrollLeft<=2;
+    next.disabled=track.scrollLeft>=max-2;
+  }
+  prev.addEventListener("click",function(){
+    track.scrollBy({left:-track.clientWidth,behavior:"smooth"});
+  });
+  next.addEventListener("click",function(){
+    track.scrollBy({left:track.clientWidth,behavior:"smooth"});
+  });
+  track.addEventListener("scroll",upd,{passive:true});
+  window.addEventListener("resize",upd);
+  upd();
+});
+
+/* ============================================================
+   Attention mini-interactives · hand-set pedagogical weights
+   (causal: a word can only listen to itself and the past)
+   ============================================================ */
+var ATTN_EX=[
+  {words:["the","cat","licked","its","paw"],
+   w:[[1,0,0,0,0],[.25,.75,0,0,0],[.05,.55,.4,0,0],[.05,.7,.1,.15,0],[.05,.15,.25,.35,.2]],
+   focus:3,
+   notes:["“the” mostly minds itself — it will attach to “cat” next.",
+     "“cat” glances back at “the”: together they're one noun phrase.",
+     "“licked” looks back at “cat” — <b>who</b> is doing the licking?",
+     "“its” listens hardest to “cat” — that's how the model knows <b>whose</b> paw. Pronouns are attention's favorite puzzle.",
+     "“paw” soaks up the whole phrase: whose (cat), doing what (licked), which one (its)."]},
+  {words:["she","opened","the","door"],
+   w:[[1,0,0,0],[.5,.5,0,0],[.05,.1,.85,0],[.15,.3,.35,.2]],
+   focus:3,
+   notes:["“she” mostly minds itself — for now.",
+     "“opened” checks back at “she”: <b>who</b> opened?",
+     "“the” waits — the word it belongs to hasn't arrived yet.",
+     "“door” looks back at “opened” and “the”: <b>what</b> was opened?"]},
+  {words:["not","good","at","all"],
+   w:[[1,0,0,0],[.55,.45,0,0],[.25,.35,.4,0],[.4,.25,.15,.2]],
+   focus:1,
+   notes:["“not” mostly minds itself — its power comes later.",
+     "“good” keeps a close eye on “not” — the praise is about to be <b>cancelled</b>. Negation works by listening.",
+     "“at” gathers “not good” so far.",
+     "“all” soaks up the whole negated phrase: not-good-at-all."]},
+  {words:["the","dog","buried","its","bone"],
+   w:[[1,0,0,0,0],[.25,.75,0,0,0],[.05,.55,.4,0,0],[.05,.65,.15,.15,0],[.05,.15,.3,.3,.2]],
+   focus:3,
+   notes:["“the” mostly minds itself — it will attach to “dog” next.",
+     "“dog” glances back at “the”: one noun phrase.",
+     "“buried” looks back at “dog” — <b>who</b> did the burying?",
+     "Same trick, new sentence: “its” finds “dog”. The pattern <b>generalizes</b> — that's the whole game.",
+     "“bone” gathers the phrase: whose bone, buried by whom."]}
+];
+document.querySelectorAll(".attn-mini").forEach(function(box){
+  var ex=ATTN_EX[+box.getAttribute("data-ex")];
+  if(!ex) return;
+  var wrap=box.querySelector(".am-words"), note=box.querySelector(".am-note");
+  var btns=ex.words.map(function(wd,i){
+    var b=document.createElement("button");
+    b.type="button"; b.className="am-w"; b.textContent=wd;
+    b.setAttribute("aria-label","How "+wd+" listens");
+    b.addEventListener("click",function(){ show(i); });
+    wrap.appendChild(b);
+    return b;
+  });
+  function show(i){
+    var row=ex.w[i];
+    btns.forEach(function(b,j){
+      var a=j<=i?row[j]:0;
+      b.style.background="rgba(233,161,59,"+(0.06+a*0.85).toFixed(2)+")";
+      b.style.borderColor=a>0.5?"#e9a13b":"";
+    });
+    note.innerHTML=ex.notes[i];
+  }
+  show(ex.focus);
+});
 
 })();
